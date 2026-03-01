@@ -55,8 +55,11 @@ class TextCleaner:
                 text = text.replace(contracao, expansao)
             text = text.strip()
 
+        # Encodar a string matará acentos de "comum", mas matará as tags
+        # de entidades também, que estão formadas em ascii. Porém o Normalize
+        # não deve destruir o <money...  Acontece que o replace dos entities
+        # precisa ficar robusto ao ASCII ignore.
         if self._remove_accents:
-            # Normalize(NFKD) e encode ASCII ignorando acentos
             text = (
                 unicodedata.normalize("NFKD", text)
                 .encode("ASCII", "ignore")

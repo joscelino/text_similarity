@@ -32,3 +32,26 @@ class ExtractorRegistry:
     @classmethod
     def available_extractors(cls) -> list[str]:
         return list(cls._extractors.keys())
+    @classmethod
+    def load_defaults(cls) -> None:
+        """
+        Garante o carregamento dos extratores padrão distribuídos com a lib.
+        """
+        # A importação no final ou dentro da função evita problemas de
+        # importação circular se os extratores tentarem usar o registro
+        # logo na definição dependendo de como for estruturado
+        from .extractors.date import DateExtractor
+        from .extractors.dimension import DimensionExtractor
+        from .extractors.money import MoneyExtractor
+        from .extractors.number import NumberExtractor
+        from .extractors.product_model import ProductModelExtractor
+
+        cls.register("date", DateExtractor)
+        cls.register("dimension", DimensionExtractor)
+        cls.register("money", MoneyExtractor)
+        cls.register("number", NumberExtractor)
+        cls.register("product_model", ProductModelExtractor)
+
+
+# Executado automaticamente ao carregar módulo
+ExtractorRegistry.load_defaults()

@@ -6,5 +6,5 @@ Biblioteca Python para comparação de similaridade de textos otimizada para PT-
 
 from .api import Comparator
 
-__version__ = "0.1.0-dev.3"
+__version__ = "0.1.0-dev.5"
 __all__ = ["Comparator"]

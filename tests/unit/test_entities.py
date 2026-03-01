@@ -2,6 +2,12 @@
 from __future__ import annotations
 
 from text_similarity.entities.extractors.date import DateExtractor
+from text_similarity.entities.extractors.dimension import DimensionExtractor
+from text_similarity.entities.extractors.money import MoneyExtractor
+from text_similarity.entities.extractors.number import NumberExtractor
+from text_similarity.entities.extractors.product_model import ProductModelExtractor
+from text_similarity.entities.inspector import EntityInspector
+from text_similarity.entities.normalizer import EntityNormalizer
 
 
 def test_date_extractor_relative() -> None:
@@ -30,11 +36,6 @@ def test_date_extractor_absolute() -> None:
     m = matches[0]
     assert m.value == "2024-04-25"
     assert "25 de abril de 2024" in m.text_matched.lower()
-
-
-from text_similarity.entities.extractors.dimension import DimensionExtractor
-from text_similarity.entities.extractors.money import MoneyExtractor
-from text_similarity.entities.extractors.number import NumberExtractor
 
 
 def test_money_extractor() -> None:
@@ -67,17 +68,14 @@ def test_number_extractor() -> None:
     assert matches[1].value == 2  # "2"
 
 
-from text_similarity.entities.extractors.product_model import ProductModelExtractor
-from text_similarity.entities.inspector import EntityInspector
-from text_similarity.entities.normalizer import EntityNormalizer
-
-
 def test_product_model_extractor() -> None:
     extractor = ProductModelExtractor()
     text = "Temos o S22 Ultra e o iPhone 13. Também a peça XJ-900."
     matches = extractor.extract(text)
 
-    # "S22", "13" (o número 13 atende à regex de número, mas não a de let+num do produto sozinho, 'iPhone 13' não vai bater a menos que mude a regex, vamos ver), "XJ-900"
+    # "S22", "13" (o número 13 atende à regex de número, mas não
+    # a de let+num do produto sozinho, 'iPhone 13' não vai bater
+    # a menos que mude a regex, vamos ver), "XJ-900"
     # Nossa regex exige \d+[-][A-Za-z] ou [A-Za-z]+[-]\d+
     assert len(matches) >= 2
     vals = [m.value for m in matches]

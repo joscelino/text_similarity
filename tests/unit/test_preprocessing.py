@@ -22,7 +22,7 @@ def test_text_cleaner() -> None:
     assert (
         "r$ 5000" in cleaned
     )  # Porque R$ 50,00 -> r$ 5000 (sem acento, virgula vai embora)
-    # Vamos ver o regex atual: [^a-z0-9\s$<>\-:] . Logo o $ fica. A vírgula sai, o ponto sai.
+    # O regex atual: [^a-z0-9\s$<>\-:] preserva o $. A vírgula/ponto saem.
     assert "r$ 5000" in cleaned
 
 

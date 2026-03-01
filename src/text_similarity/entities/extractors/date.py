@@ -20,7 +20,7 @@ class DateExtractor(EntityExtractor):
         patterns = [
             r"\b\d{1,2}[/-]\d{1,2}[/-]\d{2,4}\b",  # 25/04/2024
             r"\b\d{1,2}\s+de\s+[A-Za-zçÇ]+\s+de\s+\d{2,4}\b",  # 25 de abril de 2024
-            r"\b(?:amanhã|ontem|hoje)\b",  # relativas (desconsidera acentos problemáticos)
+            r"\b(?:amanhã|ontem|hoje)\b",  # relativas (desconsidera acentos)
         ]
 
         # Também tentaremos variações em Unicode

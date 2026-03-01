@@ -1,6 +1,6 @@
 [project]
 name = "text-similarity"
-version = "0.1.0-dev.5"
+version = "0.1.0-rc.1"
 description = "Add your description here"
 readme = "README.md"
 requires-python = ">=3.8"
@@ -33,7 +33,10 @@ line-length = 88
 target-version = "py38"
 
 [tool.ruff.lint]
-select = ["E", "F", "W", "I"]
+select = ["E", "F", "W", "I", "D"]
+
+[tool.ruff.lint.pydocstyle]
+convention = "google"
 
 [tool.mypy]
 python_version = "3.8"

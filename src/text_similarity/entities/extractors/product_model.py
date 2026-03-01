@@ -1,3 +1,5 @@
+"""Módulo para a detecção de modelos e classes de entidades combinando alfanuméricos."""
+
 from __future__ import annotations
 
 import re
@@ -7,13 +9,14 @@ from ..registry import ExtractorRegistry
 
 
 class ProductModelExtractor(EntityExtractor):
-    """
-    Extrator de modelos de produtos.
+    """Extrator de modelos de produtos.
+    
     Foca em códigos alfanuméricos comuns em eletrônicos, peças e afins.
     Ex: "S22", "XJ-900", "iPhone 13", "M1".
     """
 
     def extract(self, text: str) -> list[EntityMatch]:
+        """Extrai classes de referência técnica isolando letras hifenizadas e contíguas de numerais."""
         matches: list[EntityMatch] = []
 
         # Padrões para modelos de produtos

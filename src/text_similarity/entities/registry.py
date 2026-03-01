@@ -1,3 +1,5 @@
+"""Módulo de gerência e catálogo de extratores habilitados de entidades."""
+
 from __future__ import annotations
 
 from typing import Type
@@ -6,8 +8,8 @@ from .base import EntityExtractor
 
 
 class ExtractorRegistry:
-    """
-    Registro centralizado de extratores de entidades.
+    """Registro centralizado de extratores de entidades.
+    
     Permite acoplar e invocar extratores pelo nome (ex: 'money', 'date').
     """
 
@@ -15,28 +17,24 @@ class ExtractorRegistry:
 
     @classmethod
     def register(cls, name: str, extractor_cls: Type[EntityExtractor]) -> None:
-        """
-        Registra um extrator customizado ou padrão.
-        """
+        """Registra um extrator customizado ou padrão."""
         cls._extractors[name] = extractor_cls
 
     @classmethod
     def get_extractor(cls, name: str) -> EntityExtractor:
-        """
-        Instancia e retorna um extrator pelo nome registrado.
-        """
+        """Instancia e retorna um extrator pelo nome registrado."""
         if name not in cls._extractors:
             raise ValueError(f"Extrador '{name}' não registrado.")
         return cls._extractors[name]()
 
     @classmethod
     def available_extractors(cls) -> list[str]:
+        """Apresenta a lista estática de chaves permitidas instanciáveis no registro."""
         return list(cls._extractors.keys())
+
     @classmethod
     def load_defaults(cls) -> None:
-        """
-        Garante o carregamento dos extratores padrão distribuídos com a lib.
-        """
+        """Garante o carregamento dos extratores padrão distribuídos com a lib."""
         # A importação no final ou dentro da função evita problemas de
         # importação circular se os extratores tentarem usar o registro
         # logo na definição dependendo de como for estruturado

@@ -1,3 +1,5 @@
+"""Módulo de Lematização usando NLTK e SpaCy opcional e como fallback."""
+
 from __future__ import annotations
 
 import logging
@@ -6,14 +8,15 @@ logger = logging.getLogger(__name__)
 
 
 class Lemmatizer:
-    """
-    Lematizador PT-BR.
+    """Lematizador PT-BR.
+    
     Tenta utilizar spaCy primeiramente, se disponível, para alta precisão.
     Senão, utiliza NLTK (RSLPStemmer) como fallback que provê Stemming.
     Se nenhum estiver disponível, atua como um pass-through e loga um aviso.
     """
 
     def __init__(self) -> None:
+        """Tenta injetar backends de linguística."""
         self.backend = "none"
         self._nlp = None
         self._stemmer = None
@@ -53,8 +56,8 @@ class Lemmatizer:
         )
 
     def lemmatize(self, tokens: list[str]) -> list[str]:
-        """
-        Aplica stemming/lematização aos tokens.
+        """Aplica stemming/lematização aos tokens.
+        
         Tags de entidade são ignoradas e retornadas como estão.
         """
         if not tokens:

@@ -1,3 +1,5 @@
+"""Módulo extrator de numerais, mapeando algarismos e numerais cardinais em extenso."""
+
 from __future__ import annotations
 
 import re
@@ -7,9 +9,7 @@ from ..registry import ExtractorRegistry
 
 
 class NumberExtractor(EntityExtractor):
-    """
-    Extrator de números (dígitos e numerais cardinais básicos).
-    """
+    """Extrator de números (dígitos e numerais cardinais básicos)."""
 
     # Mapeamento estático e simples pro MVP.
     # Em produção, uma lib como 'word2number' seria mais completa.
@@ -33,6 +33,7 @@ class NumberExtractor(EntityExtractor):
     }
 
     def extract(self, text: str) -> list[EntityMatch]:
+        """Localiza ocorrências de numerais por Regex e converte numerais por extenso através de mapeamento em dict."""
         matches: list[EntityMatch] = []
 
         # Dígitos numéricos isolados

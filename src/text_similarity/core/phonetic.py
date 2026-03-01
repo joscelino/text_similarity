@@ -1,3 +1,5 @@
+"""Módulo de similaridade baseada em fonética PT-BR e heurísticas audíveis."""
+
 from __future__ import annotations
 
 import unicodedata
@@ -8,16 +10,16 @@ from .base import SimilarityAlgorithm
 
 
 class PhoneticSimilarity(SimilarityAlgorithm):
-    """
-    Calcula similaridade fonética baseada em heurísticas para PT-BR.
+    """Calcula similaridade fonética baseada em heurísticas para PT-BR.
+    
     Utilizamos um algoritmo de substituição fonética rudimentar que cobre 80%
     dos casos de erros de digitação auditivos em português (s/ss/z/c/ç),
     aliado à distância Levenshtein.
     """
 
     def _phonetic_hash(self, text: str) -> str:
-        """
-        Converte o texto para uma representação aproximada do som em PT-BR.
+        """Converte o texto para uma representação aproximada do som em PT-BR.
+        
         Ex: "casa" -> "kaza", "passarinho" -> "pasarinho", "exceção" -> "esesso",
         "fazenda" -> "fazenda".
         """
@@ -55,6 +57,7 @@ class PhoneticSimilarity(SimilarityAlgorithm):
         return text
 
     def compare(self, text1: str, text2: str) -> float:
+        """Trata cada palavra do texto para fonemas, as une e calcula Levenshtein."""
         if not text1 or not text2:
             return 0.0
 

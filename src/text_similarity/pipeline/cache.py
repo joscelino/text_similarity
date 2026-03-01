@@ -1,3 +1,5 @@
+"""Módulo de gerência de cache via disco para otimizar tempo de pipeline."""
+
 from __future__ import annotations
 
 import hashlib
@@ -8,16 +10,17 @@ from joblib import Memory
 
 
 class PipelineCache:
-    """
-    Gerenciador de cache para otimização de processamento no pipeline.
+    """Gerenciador de cache para otimização de processamento no pipeline.
+    
     Utiliza joblib.Memory para cache em disco (ideal para grandes catálogos) e hashes.
     Implementamos LRU/Memória para deduplicação rápida.
     """
 
     def __init__(self, cache_dir: str | Path | None = None) -> None:
-        """
+        """Inicializa a estrutura de cache persistente via Joblib.
+        
         Args:
-            cache_dir: Caminho para diretório de cache. Se None, usa var temporária.
+        cache_dir: Caminho para diretório de cache. Se None, usa var temporária.
         """
         if cache_dir is None:
             self.cache_dir = Path(tempfile.gettempdir()) / "text_similarity_cache"

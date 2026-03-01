@@ -1,3 +1,5 @@
+"""Módulo que detecta e infere datas temporais relativas e absolutas."""
+
 from __future__ import annotations
 
 import re
@@ -9,11 +11,10 @@ from ..registry import ExtractorRegistry
 
 
 class DateExtractor(EntityExtractor):
-    """
-    Extrator de datas utilizando Regex e Dateparser para resolver datas em PT-BR.
-    """
+    """Extrator de datas utilizando Regex e Dateparser para resolver datas em PT-BR."""
 
     def extract(self, text: str) -> list[EntityMatch]:
+        """Aplica expressões regulares buscando marcações temporais e as padroniza para ISO."""
         matches: list[EntityMatch] = []
 
         # Padrões comuns de datas em português

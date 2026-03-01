@@ -1,3 +1,5 @@
+"""Módulo de similaridade baseada em Distância de Cosseno usando Bag of Words."""
+
 from __future__ import annotations
 
 # scikit-learn
@@ -8,16 +10,18 @@ from .base import SimilarityAlgorithm
 
 
 class CosineSimilarity(SimilarityAlgorithm):
-    """
-    Calcula similaridade cosseno utilizando TF-IDF.
+    """Calcula similaridade cosseno utilizando TF-IDF.
+    
     Bom para avaliar sobreposição de vocabulário e contexto global.
     """
 
     def __init__(self, ngram_range: tuple[int, int] = (1, 2)) -> None:
+        """Inicializa configurações de tokenização TF-IDF."""
         # Usa bigramas por padrão para capturar contexto local ("s22 ultra")
         self.ngram_range = ngram_range
 
     def compare(self, text1: str, text2: str) -> float:
+        """Extrai os tokens TF-IDF e os avalia por distância Vetorial."""
         if not text1 or not text2:
             return 0.0
 

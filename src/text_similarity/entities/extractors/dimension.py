@@ -1,3 +1,5 @@
+"""Módulo que detecta dimensões físicas (peso, comprimento, etc) de produtos."""
+
 from __future__ import annotations
 
 import re
@@ -7,11 +9,10 @@ from ..registry import ExtractorRegistry
 
 
 class DimensionExtractor(EntityExtractor):
-    """
-    Extrator de dimensões físicas (kg, mg, m, cm, l, ml, etc).
-    """
+    """Extrator de dimensões físicas (kg, mg, m, cm, l, ml, etc)."""
 
     def extract(self, text: str) -> list[EntityMatch]:
+        """Varre o texto utilizando expressões regulares buscando medidas numéricas associadas a unidades físicas."""
         matches: list[EntityMatch] = []
 
         # Ex: "2kg", "1.5m", "30 cm"

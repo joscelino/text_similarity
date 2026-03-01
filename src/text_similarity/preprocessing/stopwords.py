@@ -1,9 +1,11 @@
+"""Filtros e dicionários de remoção de palavras-vazias (Stop Words) em português."""
+
 from __future__ import annotations
 
 
 class StopwordsFilter:
-    """
-    Filtro de stopwords em português.
+    """Filtro de stopwords em português.
+    
     Inclui uma lista nativa leve para evitar dependência obrigatória do NLTK/spaCy.
     """
 
@@ -199,7 +201,8 @@ class StopwordsFilter:
 
     def __init__(
         self, use_default: bool = True, custom_stopwords: set[str] | None = None
-    ):
+    ) -> None:
+        """Inicializa as stopwords do filtro."""
         self._stopwords = set()
         if use_default:
             self._stopwords.update(self.DEFAULT_STOPWORDS)
@@ -207,9 +210,9 @@ class StopwordsFilter:
             self._stopwords.update(custom_stopwords)
 
     def filter(self, tokens: list[str]) -> list[str]:
-        """
-        Recebe uma lista de tokens limpados (sem acento, minúsculos, etc)
-        e retorna uma nova lista sem as stopwords.
+        """Recebe uma lista de tokens limpados (sem acento, minúsculos, etc).
+        
+        Retorna uma nova lista sem as stopwords.
         Preserva as tags de entidade (<money:10> etc).
         """
         # Tags de entidade e números não são stopwords

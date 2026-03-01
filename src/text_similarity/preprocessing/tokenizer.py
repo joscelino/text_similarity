@@ -1,19 +1,19 @@
+"""Módulo para subdivisão de strings de entrada em tokens e identificação de limite de palavras."""
+
 from __future__ import annotations
 
 import re
 
 
 class Tokenizer:
-    """
-    Responsável por quebrar o texto limpo em tokens.
+    """Responsável por quebrar o texto limpo em tokens.
+    
     Uma implementação simples baseada em regex que lida com o formato PT-BR
     e respeita as tags de entidade (<money:10>, etc).
     """
 
     def tokenize(self, text: str) -> list[str]:
-        """
-        Tokeniza o texto mas mantém as tags de entidade unidas.
-        """
+        """Tokeniza o texto mas mantém as tags de entidade unidas."""
         # Encontra ou tags exatas <tipo:valor> ou palavras alfa-numéricas
         # que já foram limpas pelo text_cleaner.
         # Captura:

@@ -1,12 +1,13 @@
-from __future__ import annotations
+"""Módulo para saneamento básico de string, desativando pontuações e acentos textuais."""
 
+from __future__ import annotations
 import re
 import unicodedata
 
 
 class TextCleaner:
-    """
-    Limpa e normaliza textos em português.
+    """Limpa e normaliza textos em português.
+    
     Responsabilidades: lowercase, remoção de acentos/pontuação extra,
     e expansão de contrações básicas.
     """
@@ -40,12 +41,14 @@ class TextCleaner:
         remove_accents: bool = True,
         expand_contractions: bool = True,
         remove_punctuation: bool = True,
-    ):
+    ) -> None:
+        """Inicializa configurações de limpeza baseadas em flags booleanas."""
         self._remove_accents = remove_accents
         self._expand_contractions = expand_contractions
         self._remove_punctuation = remove_punctuation
 
     def clean(self, text: str) -> str:
+        """Limpa o texto conforme as predefinições de instância passadas no contrutor."""
         text = text.lower()
 
         if self._expand_contractions:

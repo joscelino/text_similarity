@@ -1,3 +1,5 @@
+"""Módulo implementando a similaridade híbrida customizada ponderada."""
+
 from __future__ import annotations
 
 from typing import Any
@@ -9,17 +11,18 @@ from .rapidfuzz_cmp import EditDistanceSimilarity
 
 
 class HybridSimilarity(SimilarityAlgorithm):
-    """
-    Calcula uma similaridade combinada (ponderada) utilizando múltiplos
-    modelos disponíveis (TF-IDF Cosseno, Distância de Edição e Fonética).
+    """Calcula uma similaridade combinada (ponderada) utilizando múltiplos.
+    
+    Modelos disponíveis (TF-IDF Cosseno, Distância de Edição e Fonética).
     """
 
     def __init__(self, weights: dict[str, float] | None = None) -> None:
-        """
+        """Inicializa agregador de distâncias computacionais simultâneas.
+        
         Args:
             weights: Dicionário identificando o peso relativo de cada
-                     algoritmo no resultado final.
-                     Padrão: {"cosine": 0.4, "edit": 0.4, "phonetic": 0.2}
+                algoritmo no resultado final.
+                Padrão: {"cosine": 0.4, "edit": 0.4, "phonetic": 0.2}.
         """
         self.weights = weights or {"cosine": 0.4, "edit": 0.4, "phonetic": 0.2}
 
@@ -37,6 +40,7 @@ class HybridSimilarity(SimilarityAlgorithm):
         }
 
     def compare(self, text1: str, text2: str) -> float:
+        """Soma iterativamente as ponderações de cada algoritmo."""
         if not text1 or not text2:
             return 0.0
 
@@ -49,9 +53,7 @@ class HybridSimilarity(SimilarityAlgorithm):
         return final_score
 
     def explain(self, text1: str, text2: str) -> dict[str, Any]:
-        """
-        Funcionalidade especial sugerida: explica a contribuição de cada.
-        """
+        """Funcionalidade especial sugerida: explica a contribuição de cada."""
         if not text1 or not text2:
             return {"score": 0.0, "details": {}}
 

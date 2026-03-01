@@ -1,0 +1,62 @@
+site_name: text-similarity
+site_description: Biblioteca Python otimizada para comparação e similaridade de textos em português brasileiro (PT-BR).
+site_author: Seu Nome / Organização
+
+theme:
+  name: material
+  language: pt-BR
+  features:
+    - navigation.tabs
+    - navigation.sections
+    - navigation.top
+    - search.suggest
+    - search.highlight
+    - content.code.copy
+  palette:
+    - scheme: default
+      primary: indigo
+      accent: deep purple
+      toggle:
+        icon: material/brightness-7
+        name: Trocar para modo escuro
+    - scheme: slate
+      primary: indigo
+      accent: deep purple
+      toggle:
+        icon: material/brightness-4
+        name: Trocar para modo claro
+
+repo_name: text-similarity
+repo_url: https://github.com/joscelino/text_similarity
+edit_uri: edit/main/mkdocs_docs/
+docs_dir: mkdocs_docs
+
+nav:
+  - Início: index.md
+  - Guia de Uso:
+    - Instalação: guide/installation.md
+    - Uso Básico e Smart: guide/usage.md
+    - Entidades Suportadas: guide/entities.md
+  - Referência da API:
+    - Comparator: api/comparator.md
+    - Pipeline e Estágios: api/pipeline.md
+    - Algoritmos e Core: api/core.md
+
+markdown_extensions:
+  - admonition
+  - pymdownx.details
+  - pymdownx.superfences
+  - pymdownx.highlight:
+      anchor_linenums: true
+  - pymdownx.inlinehilite
+  - pymdownx.snippets
+  - markdown.extensions.tables
+
+plugins:
+  - search
+  - mkdocstrings:
+      handlers:
+        python:
+          paths: [src]
+          options:
+            docstring_style: google

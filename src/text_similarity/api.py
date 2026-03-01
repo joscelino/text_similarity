@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+
 class Comparator:
     """
     Classe principal para comparação de similaridade de textos em português.

@@ -1,0 +1,76 @@
+from __future__ import annotations
+
+import re
+import unicodedata
+
+
+class TextCleaner:
+    """
+    Limpa e normaliza textos em português.
+    Responsabilidades: lowercase, remoção de acentos/pontuação extra,
+    e expansão de contrações básicas.
+    """
+
+    # Principais contrações do português para expansão
+    CONTRACOES = {
+        " do ": " de o ",
+        " da ": " de a ",
+        " dos ": " de os ",
+        " das ": " de as ",
+        " no ": " em o ",
+        " na ": " em a ",
+        " nos ": " em os ",
+        " nas ": " em as ",
+        " num ": " em um ",
+        " numa ": " em uma ",
+        " nums ": " em uns ",
+        " numas ": " em umas ",
+        " ao ": " a o ",
+        " à ": " a a ",
+        " aos ": " a os ",
+        " às ": " a as ",
+        " pelo ": " por o ",
+        " pela ": " por a ",
+        " pelos ": " por os ",
+        " pelas ": " por as ",
+    }
+
+    def __init__(
+        self,
+        remove_accents: bool = True,
+        expand_contractions: bool = True,
+        remove_punctuation: bool = True,
+    ):
+        self._remove_accents = remove_accents
+        self._expand_contractions = expand_contractions
+        self._remove_punctuation = remove_punctuation
+
+    def clean(self, text: str) -> str:
+        text = text.lower()
+
+        if self._expand_contractions:
+            # Adicionamos espaços nas bordas para replace de palavras soltas
+            text = f" {text} "
+            for contracao, expansao in self.CONTRACOES.items():
+                text = text.replace(contracao, expansao)
+            text = text.strip()
+
+        if self._remove_accents:
+            # Normalize(NFKD) e encode ASCII ignorando acentos
+            text = (
+                unicodedata.normalize("NFKD", text)
+                .encode("ASCII", "ignore")
+                .decode("utf-8")
+            )
+
+        if self._remove_punctuation:
+            # Remove pontuações que não compõem palavras.
+            # Cuidado para não matar as marcações de entidade do tipo <money:10>
+            # Vamos manter alfanuméricos, espaços, hífens,
+            # pontos (decimais) e < > : (usados pelas entidades)
+            text = re.sub(r"[^a-z0-9\s$<>\-:\.]", "", text)
+
+        # Remover espaços duplicados
+        text = re.sub(r"\s+", " ", text).strip()
+
+        return text

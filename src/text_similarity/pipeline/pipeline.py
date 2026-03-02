@@ -3,17 +3,19 @@
 from __future__ import annotations
 
 import logging
-from typing import Any, List
+from typing import List
 
-from .stage import PipelineStage
+from .stage import PipelineContext, PipelineStage
 
 logger = logging.getLogger(__name__)
 
+
 class PreprocessingPipeline:
     """Orquestrador de pré-processamento.
-    
-    Encadeia componentes (TextCleaner -> EntityNormalizer ->
-    Tokenizer -> Stopwords -> Lemmatizer).
+
+    Encadeia componentes (EntityNormalizer -> TextCleaner ->
+    Tokenizer -> Stopwords -> Lemmatizer) passando um `PipelineContext`
+    entre cada estágio.
     """
 
     def __init__(self, stages: List[PipelineStage] | None = None) -> None:
@@ -24,19 +26,24 @@ class PreprocessingPipeline:
         """Anexa um novo estágio ao fim da fila de execução da pipeline."""
         self.stages.append(stage)
 
-    def process(self, text: str) -> tuple[str, dict[str, Any]]:
-        """Executa os estágios em sequência.
+    def process(self, text: str) -> tuple[str, PipelineContext]:
+        """Executa os estágios em sequência sobre o texto fornecido.
+
+        Cria um `PipelineContext` inicial e o passa por cada estágio,
+        acumulando transformações e metadados ao longo do caminho.
+
+        Args:
+            text: Texto bruto de entrada.
 
         Returns:
-            Tuple: (texto_processado, dicionário_de_contexto_da_execucao)
+            Tuple: (texto_processado, contexto_completo_da_execução)
         """
-        context: dict[str, Any] = {"entities_found": []}
-        current_text = text
+        ctx = PipelineContext(text=text)
 
         for stage in self.stages:
             try:
-                current_text = stage.process(current_text, context)
+                ctx = stage.process(ctx)
             except Exception as e:
                 logger.error(f"Erro no estágio {stage.__class__.__name__}: {e}")
 
-        return current_text, context
+        return ctx.text, ctx

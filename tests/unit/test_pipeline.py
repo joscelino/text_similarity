@@ -37,8 +37,9 @@ def test_preprocessing_pipeline() -> None:
     assert "<dimension:" in processed
     assert "<money:30.0>" in processed
     assert "comprar" in processed or "comprei" in processed
-    # tokenizer stage coloca os tokens no formato str
-    assert "token" in context or "tokens" in context
+    # TokenizerStage popula ctx.tokens; verificamos via atributo do PipelineContext
+    assert isinstance(context.tokens, list)
+    assert len(context.tokens) > 0
 
 
 def test_pipeline_cache() -> None:

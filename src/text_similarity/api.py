@@ -4,7 +4,7 @@ A interface central para comparação é através da classe `Comparator`.
 """
 from __future__ import annotations
 
-from typing import Any
+from typing import Any, List
 
 from text_similarity.core.base import SimilarityAlgorithm
 from text_similarity.core.hybrid import HybridSimilarity
@@ -17,6 +17,7 @@ from text_similarity.pipeline.backends import (
 )
 from text_similarity.pipeline.cache import PipelineCache
 from text_similarity.pipeline.pipeline import PreprocessingPipeline
+from text_similarity.pipeline.stage import PipelineStage
 
 
 class Comparator:
@@ -46,7 +47,7 @@ class Comparator:
         self._cache_store: dict[str, str] = {}
 
         # Configuração do Pipeline
-        stages = []
+        stages: List[PipelineStage] = []
         if self.mode == "smart":
             # Smart habilita a normalização de entidades antes da limpeza
             from text_similarity.entities.normalizer import EntityNormalizer

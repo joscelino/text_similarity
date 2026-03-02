@@ -70,7 +70,9 @@ class TestComparatorBasicEndToEnd:
     def test_unrelated_products_score_low(self) -> None:
         """Produtos sem relação semântica devem ter score baixo."""
         comp = Comparator.basic()
-        score = comp.compare("geladeira electrolux frost free", "foguete espacial da nasa")
+        score = comp.compare(
+            "geladeira electrolux frost free", "foguete espacial da nasa"
+        )
         assert score < 0.2, f"Score esperado < 0.2, obtido: {score}"
 
 

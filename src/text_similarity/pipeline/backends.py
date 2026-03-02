@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import re
+
 from text_similarity.entities.normalizer import EntityNormalizer
 from text_similarity.pipeline.stage import PipelineContext, PipelineStage
 from text_similarity.preprocessing.lemmatization import Lemmatizer
@@ -26,12 +28,41 @@ class CleanTextStage(PipelineStage):
 class NormalizeEntitiesStage(PipelineStage):
     """Estágio de pipeline que detecta entidades numéricas e as protege contra deturpação."""
 
+    # Padrão: sigla curta de fabricante (2–4 letras) + espaço + sufixo alfanumérico MISTO.
+    # Limite de 4 letras exclui palavras PT-BR comuns (BALAO=5, CATETER=7)
+    # enquanto cobre siglas típicas: RFX, APC, HP, LG, 3M, S (Galaxy S).
+    # O sufixo deve conter obrigatoriamente letras E dígitos.
+    # Ex válidos  : "RFX 765J9", "S 22Ultra", "HP Z2G9"
+    # Ex inválidos: "BALAO RFX765J9" (5 letras), "Custou 30" (sufixo só numérico)
+    _MODEL_SPACE_RE = re.compile(
+        r"\b([A-Za-z]{2,4})"       # grupo 1: sigla curta (2-4 letras)
+        r"\s"                       # espaço
+        r"("                        # grupo 2: sufixo misto (letras+dígitos)
+        r"(?=[A-Za-z\d]*[A-Za-z][A-Za-z\d]*\d"   # tem letras... e dígito
+        r"|[A-Za-z\d]*\d[A-Za-z\d]*[A-Za-z])"    # ou dígito... e letras
+        r"[A-Za-z\d]+(?:[-][A-Za-z\d]+)*"        # captura o sufixo real
+        r")"
+        r"\b"
+    )
+
     def __init__(self, normalizer: EntityNormalizer | None = None) -> None:
         """Inicializa o estágio de normalização de entidades."""
         self.normalizer = normalizer or EntityNormalizer()
 
+    @staticmethod
+    def _collapse_model_spaces(text: str) -> str:
+        """Cola siglas de modelos que têm espaço interno, antes do extrator rodar.
+
+        Converte padrões como "RFX 765J9" em "RFX765J9" para que o
+        `ProductModelExtractor` capture a entidade completa como um único token.
+        Apenas casos onde a sigla tem 2–6 letras e o sufixo é alfanumérico
+        misto (letras + dígitos) são normalizados, minimizando falsos positivos.
+        """
+        return NormalizeEntitiesStage._MODEL_SPACE_RE.sub(r"\1\2", text)
+
     def process(self, ctx: PipelineContext) -> PipelineContext:
-        """Varre e substitui entidades no texto injetando suas tags no contexto."""
+        """Colapsa espaços internos de modelos e depois normaliza entidades no contexto."""
+        ctx.text = self._collapse_model_spaces(ctx.text)
         ctx.text = self.normalizer.normalize(ctx.text)
         return ctx
 

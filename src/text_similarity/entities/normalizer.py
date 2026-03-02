@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from typing import Any
+
 from .inspector import EntityInspector
 
 
@@ -26,7 +28,7 @@ class EntityNormalizer:
         normalized = text
 
         # Filtra ocorrências com sobreposição
-        valid_matches = []
+        valid_matches: list[Any] = []
         for match in sorted(matches, key=lambda m: m.start):
             # Se sobrepõe com a última validada, descarta
             if valid_matches and match.start < valid_matches[-1].end:

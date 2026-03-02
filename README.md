@@ -88,7 +88,23 @@ print(detalhes["details"])
 # {'cosine': 0.82, 'edit': 0.80, 'phonetic': 0.95} -> Foneticamente altíssimo e detectada dimensão de 55.
 ```
 
+## 🎯 Interpretação dos Scores
+
+O score retornado varia entre `0.0` (completamente diferentes) e `1.0` (idênticos).
+
+| Faixa | Interpretação |
+|---|---|
+| `>= 0.85` | Match muito forte — provável duplicata ou variação mínima de descrição |
+| `0.60 – 0.84` | Match provável — mesmo item com descrição diferente (ex: código com/sem espaço) |
+| `0.35 – 0.59` | Match incerto — requer revisão manual |
+| `< 0.35` | Sem relação semântica relevante |
+
+> **Dica:** Para domínios com códigos de produto (materiais, SKUs, peças técnicas), um threshold de `>= 0.60` é um bom ponto de partida. Calibre com pares conhecidos do seu domínio para ajustar precisão × recall.
+
+---
+
 ## Configuração do Cache Local
+
 A biblioteca expõe opções de cache na largada de configuração (Memory de Disco usando hashlib/Joblib).  Ao passar `use_cache=True` para os construtores de classe, hashes em SHA-256 previnem as longas travadas do motor de Regex ou SpaCy de recalcular um payload que o serviço de NLP submeteu recentemente.
 
 

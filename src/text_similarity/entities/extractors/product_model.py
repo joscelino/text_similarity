@@ -10,21 +10,25 @@ from ..registry import ExtractorRegistry
 
 class ProductModelExtractor(EntityExtractor):
     """Extrator de modelos de produtos.
-    
+
     Foca em códigos alfanuméricos comuns em eletrônicos, peças e afins.
-    Ex: "S22", "XJ-900", "iPhone 13", "M1".
+    Ex: "S22", "XJ-900", "iPhone 13", "M1", "RFX765J9".
+
+    O texto de entrada já deve ter sido pré-normalizado pelo
+    `NormalizeEntitiesStage` (via `_collapse_model_spaces`) para que
+    padrões como "RFX 765J9" (com espaço interno) sejam colados como
+    "RFX765J9" antes de chegar ao extrator.
     """
 
     def extract(self, text: str) -> list[EntityMatch]:
         """Extrai classes de referência técnica isolando letras hifenizadas e contíguas de numerais."""
         matches: list[EntityMatch] = []
 
-        # Padrões para modelos de produtos
-        # 1. Letras seguidas de números ou vice-versa, com ou sem hífen
-        # (ex: S22, A-50, 4K, 128GB, XJ-900)
+        # Padrões para modelos de produtos:
+        # 1. Letras seguidas de números, com ou sem hífen (ex: S22, A-50, 4K, RFX765J9)
+        # 2. Números seguidos de letras (ex: 128GB, 4K, 55pol)
         # Requer conter ambos letras e números para não casar com
         # palavras normais ou números puros.
-        # Nós procuramos limites de palavras para isolar.
         pattern = (
             r"\b(?:[A-Za-z]+[-]?\d+[A-Za-z\d]*|"
             r"\d+[-]?[A-Za-z]+[A-Za-z\d]*)\b"
@@ -34,15 +38,10 @@ class ProductModelExtractor(EntityExtractor):
             start, end = m.span()
             matched_str = text[start:end]
 
-            # Filtro para ignorar palavras que podem ser dimensões comuns
-            # pegas acidentalmente por serem número + letra, se for o caso
-            # do DimensionExtractor cobrir, mas pra garantir deixamos o Match
-            # rolar e dependendo o Normalizer prioriza.
-            # Aqui a heurística vai varrer livremente.
             matches.append(
                 EntityMatch(
-                    entity_type="product_model",
-                    value=matched_str.upper(),  # Normalizamos pra maiúsculo
+                    entity_type="productmodel",
+                    value=matched_str.upper(),
                     start=start,
                     end=end,
                     text_matched=matched_str,

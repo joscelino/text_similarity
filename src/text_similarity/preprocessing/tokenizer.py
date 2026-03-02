@@ -7,7 +7,7 @@ import re
 
 class Tokenizer:
     """Responsável por quebrar o texto limpo em tokens.
-    
+
     Uma implementação simples baseada em regex que lida com o formato PT-BR
     e respeita as tags de entidade (<money:10>, etc).
     """

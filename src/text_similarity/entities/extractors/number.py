@@ -33,7 +33,7 @@ class NumberExtractor(EntityExtractor):
     }
 
     def extract(self, text: str) -> list[EntityMatch]:
-        """Localiza ocorrências de numerais por Regex e converte numerais por extenso através de mapeamento em dict."""
+        """Localiza ocorrências numéricas e converte literais via mapeamento."""
         matches: list[EntityMatch] = []
 
         # Dígitos numéricos isolados

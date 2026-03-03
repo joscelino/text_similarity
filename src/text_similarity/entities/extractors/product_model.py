@@ -21,7 +21,7 @@ class ProductModelExtractor(EntityExtractor):
     """
 
     def extract(self, text: str) -> list[EntityMatch]:
-        """Extrai classes de referência técnica isolando letras hifenizadas e contíguas de numerais."""
+        """Extrai referências técnicas isolando letras contíguas de numerais."""
         matches: list[EntityMatch] = []
 
         # Padrões para modelos de produtos:

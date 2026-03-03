@@ -1,4 +1,4 @@
-"""Módulo para subdivisão de strings de entrada em tokens e identificação de limite de palavras."""
+"""Módulo para subdivisão de strings em tokens e limites de palavras."""
 
 from __future__ import annotations
 

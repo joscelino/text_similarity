@@ -2,6 +2,7 @@
 
 A interface central para comparação é através da classe `Comparator`.
 """
+
 from __future__ import annotations
 
 from typing import Any, List
@@ -52,16 +53,20 @@ class Comparator:
             # Smart habilita a normalização de entidades antes da limpeza
             from text_similarity.entities.normalizer import EntityNormalizer
 
-            stages.append(NormalizeEntitiesStage(
-                normalizer=EntityNormalizer(entities=self.entities)
-            ))
+            stages.append(
+                NormalizeEntitiesStage(
+                    normalizer=EntityNormalizer(entities=self.entities)
+                )
+            )
 
-        stages.extend([
-            CleanTextStage(),
-            TokenizerStage(),
-            StopwordsStage(),
-            LemmatizeStage(),
-        ])
+        stages.extend(
+            [
+                CleanTextStage(),
+                TokenizerStage(),
+                StopwordsStage(),
+                LemmatizeStage(),
+            ]
+        )
         self.pipeline = PreprocessingPipeline(stages)
 
         # Configuração do Algoritmo
@@ -178,7 +183,7 @@ class Comparator:
             text: Texto principal para buscar.
             candidates: Lista de textos candidatos.
             top_n: Número máximo de candidatos filtrados para a etapa final.
-            min_cosine: Limiar mínimo de similaridade de cosseno para descartar ruidosos.
+            min_cosine: Limiar mínimo de cosseno para descartar ruidosos.
 
         Returns:
             Lista de dicionários, ordenados do maior score final para o menor,
@@ -193,25 +198,36 @@ class Comparator:
 
         # 2. Computar matriz TF-IDF de todos (query = índice 0, candidatos = 1..)
         from sklearn.feature_extraction.text import TfidfVectorizer
-        from sklearn.metrics.pairwise import cosine_similarity as sklearn_cosine_similarity
+        from sklearn.metrics.pairwise import (
+            cosine_similarity as sklearn_cosine_similarity,
+        )
 
         vectorizer = TfidfVectorizer(ngram_range=(1, 2), min_df=1)
         all_texts = [p_text] + p_candidates
 
         try:
             tfidf_matrix = vectorizer.fit_transform(all_texts)
-            # cosine_similarity retorna uma matriz (1, len(all_texts)) e ignoramos o índice 0 (query x query)
-            cosine_scores = sklearn_cosine_similarity(tfidf_matrix[0:1], tfidf_matrix)[0][1:]
+            # cosine_similarity retorna (1, len(all_texts)), ignoramos query x query
+            cosine_scores = sklearn_cosine_similarity(tfidf_matrix[0:1], tfidf_matrix)[
+                0
+            ][1:]
         except ValueError:
             # Vocabulary empty
             cosine_scores = [0.0] * len(candidates)
 
         # 3. Filtrar e encontrar o topN inicial com base no cosseno
         scored_candidates = []
-        for idx, (c_text, c_p_text, cos_score) in enumerate(zip(candidates, p_candidates, cosine_scores)):
+        for idx, (c_text, c_p_text, cos_score) in enumerate(
+            zip(candidates, p_candidates, cosine_scores)
+        ):
             if cos_score >= min_cosine:
                 scored_candidates.append(
-                    {"idx": idx, "candidate": c_text, "p_candidate": c_p_text, "cos_score": float(cos_score)}
+                    {
+                        "idx": idx,
+                        "candidate": c_text,
+                        "p_candidate": c_p_text,
+                        "cos_score": float(cos_score),
+                    }
                 )
 
         # Ordenar os filtrados e pegar os top N
@@ -235,38 +251,54 @@ class Comparator:
                 short_circuit = False
                 if "entity" in alg_weights and alg_weights["entity"] > 0:
                     ent_score = algs["entity"].compare(p_text, c_p_text)
-                    details["entity"] = {"score": ent_score, "weight": alg_weights["entity"]}
+                    details["entity"] = {
+                        "score": ent_score,
+                        "weight": alg_weights["entity"],
+                    }
                     if ent_score >= 1.0:
                         final_score = 0.95
                         short_circuit = True
 
                 if not short_circuit:
-                    details["cosine"] = {"score": cos_score, "weight": alg_weights.get("cosine", 0.0)}
+                    details["cosine"] = {
+                        "score": cos_score,
+                        "weight": alg_weights.get("cosine", 0.0),
+                    }
                     final_score += cos_score * alg_weights.get("cosine", 0.0)
-                    
+
                     if "entity" in alg_weights and alg_weights["entity"] > 0:
-                        final_score += details["entity"]["score"] * alg_weights["entity"]
-                        
+                        final_score += (
+                            details["entity"]["score"] * alg_weights["entity"]
+                        )
+
                     for name in ["edit", "phonetic"]:
                         if name in alg_weights and alg_weights[name] > 0:
                             score = algs[name].compare(p_text, c_p_text)
-                            details[name] = {"score": score, "weight": alg_weights[name]}
+                            details[name] = {
+                                "score": score,
+                                "weight": alg_weights[name],
+                            }
                             final_score += score * alg_weights[name]
 
-                results.append({
-                    "candidate": cand["candidate"],
-                    "score": final_score,
-                    "details": details
-                })
+                results.append(
+                    {
+                        "candidate": cand["candidate"],
+                        "score": final_score,
+                        "details": details,
+                    }
+                )
             else:
                 # Fallback, executa o método comum (mas como é batch esperamos Hybrid)
-                results.append({
-                    "candidate": cand["candidate"],
-                    "score": self.algorithm.compare(p_text, c_p_text),
-                    "details": {"algorithm": self.algorithm.compare(p_text, c_p_text)}
-                })
-        
+                results.append(
+                    {
+                        "candidate": cand["candidate"],
+                        "score": self.algorithm.compare(p_text, c_p_text),
+                        "details": {
+                            "algorithm": self.algorithm.compare(p_text, c_p_text)
+                        },
+                    }
+                )
+
         # Ordenar resultados de forma descendente no score final
         results.sort(key=lambda x: x["score"], reverse=True)
         return results
-

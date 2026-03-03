@@ -9,17 +9,17 @@ from .inspector import EntityInspector
 
 class EntityNormalizer:
     """Normaliza o texto convertendo as entidades encontradas em tokens neutros.
-    
+
     Para uso no backend de TF-IDF/Cosine.
     Ex: "Custa 30 reais" -> "Custa <money:30.0>".
     """
 
     def __init__(self, entities: list[str] | None = None) -> None:
-        """Inicializa um Inspecionador embutido configurado para captar as entidades desejadas."""
+        """Inicia um Inspecionador embutido para captar as entidades desejadas."""
         self.inspector = EntityInspector(entities)
 
     def normalize(self, text: str) -> str:
-        """Substitui valores no texto por suas tags correspondentes de baixo pra cima."""
+        """Substitui valores no texto por tags correspondentes de baixo pra cima."""
         matches = self.inspector.inspect(text)
 
         # Resolvemos da última para a primeira entidade no texto para

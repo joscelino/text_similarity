@@ -11,7 +11,7 @@ from .base import SimilarityAlgorithm
 
 class PhoneticSimilarity(SimilarityAlgorithm):
     """Calcula similaridade fonética baseada em heurísticas para PT-BR.
-    
+
     Utilizamos um algoritmo de substituição fonética rudimentar que cobre 80%
     dos casos de erros de digitação auditivos em português (s/ss/z/c/ç),
     aliado à distância Levenshtein.
@@ -19,7 +19,7 @@ class PhoneticSimilarity(SimilarityAlgorithm):
 
     def _phonetic_hash(self, text: str) -> str:
         """Converte o texto para uma representação aproximada do som em PT-BR.
-        
+
         Ex: "casa" -> "kaza", "passarinho" -> "pasarinho", "exceção" -> "esesso",
         "fazenda" -> "fazenda".
         """
@@ -41,7 +41,7 @@ class PhoneticSimilarity(SimilarityAlgorithm):
         text = text.replace("ch", "x")
         # Quem / Que -> k
         text = text.replace("qu", "k")
-        text = text.replace("c", "k") # O restante dos C (ca, co, cu) viram K
+        text = text.replace("c", "k")  # O restante dos C (ca, co, cu) viram K
 
         # G / J
         text = text.replace("ge", "je").replace("gi", "ji")

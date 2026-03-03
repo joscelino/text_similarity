@@ -1,4 +1,4 @@
-"""Módulo contendo os adaptadores (backends) que envelopam os processadores de texto na interface PipelineStage."""
+"""Módulo de adaptadores envelopando processadores na interface PipelineStage."""
 
 from __future__ import annotations
 
@@ -26,18 +26,18 @@ class CleanTextStage(PipelineStage):
 
 
 class NormalizeEntitiesStage(PipelineStage):
-    """Estágio de pipeline que detecta entidades numéricas e as protege contra deturpação."""
+    """Estágio que detecta e protege entidades numéricas contra deturpação."""
 
-    # Padrão: sigla curta de fabricante (2–4 letras) + espaço + sufixo alfanumérico MISTO.
+    # Padrão: sigla curta de fabricante (2–4 letras) + espaço + sufixo alfanumérico.
     # Limite de 4 letras exclui palavras PT-BR comuns (BALAO=5, CATETER=7)
     # enquanto cobre siglas típicas: RFX, APC, HP, LG, 3M, S (Galaxy S).
     # O sufixo deve conter obrigatoriamente letras E dígitos.
     # Ex válidos  : "RFX 765J9", "S 22Ultra", "HP Z2G9", "GN 500"
     # Ex inválidos: "BALAO RFX765J9" (5 letras), "Custou 30" (sufixo só numérico)
     _MODEL_SPACE_RE = re.compile(
-        r"\b([A-Za-z]{2,4})"       # grupo 1: sigla curta (2-4 letras)
-        r"\s+"                     # um ou mais espaços
-        r"("                       # grupo 2: sufixo longo que OBRIGATORIAMENTE contenha números
+        r"\b([A-Za-z]{2,4})"  # grupo 1: sigla curta (2-4 letras)
+        r"\s+"  # um ou mais espaços
+        r"("  # grupo 2: sufixo longo que OBRIGATORIAMENTE contenha números
         r"(?=[A-Za-z\d]*\d)[A-Za-z\d]+(?:[-][A-Za-z\d]+)*"
         r")"
         r"\b"
@@ -59,14 +59,14 @@ class NormalizeEntitiesStage(PipelineStage):
         return NormalizeEntitiesStage._MODEL_SPACE_RE.sub(r"\1\2", text)
 
     def process(self, ctx: PipelineContext) -> PipelineContext:
-        """Colapsa espaços internos de modelos e depois normaliza entidades no contexto."""
+        """Colapsa espaços internos de modelos e normaliza entidades no contexto."""
         ctx.text = self._collapse_model_spaces(ctx.text)
         ctx.text = self.normalizer.normalize(ctx.text)
         return ctx
 
 
 class TokenizerStage(PipelineStage):
-    """Estágio que quebra strings limpas em listas de tokens, mantendo as tags de entidade ilesas."""
+    """Quebra strings limpas em tokens, mantendo tags de entidade ilesas."""
 
     def __init__(self, tokenizer: Tokenizer | None = None) -> None:
         """Inicializa o tokenizador."""
@@ -80,14 +80,14 @@ class TokenizerStage(PipelineStage):
 
 
 class StopwordsStage(PipelineStage):
-    """Estágio intermediário para remoção de Stopwords do dicionário NLTK em Português."""
+    """Estágio para remoção de Stopwords do dicionário NLTK em Português."""
 
     def __init__(self, filter: StopwordsFilter | None = None) -> None:
-        """Inicia o filtro de StopWords parametrizado para ler e reescrever `ctx.tokens`."""
+        """Inicia filtro de StopWords para ler e reescrever `ctx.tokens`."""
         self.filter = filter or StopwordsFilter()
 
     def process(self, ctx: PipelineContext) -> PipelineContext:
-        """Elimina conjunções e elipses irrelevantes, atualizando tokens e texto no contexto."""
+        """Elimina conjunções irrelevantes, atualizando tokens e texto no contexto."""
         tokens = ctx.tokens if ctx.tokens else ctx.text.split()
         ctx.tokens = self.filter.filter(tokens)
         ctx.text = " ".join(ctx.tokens)
@@ -102,7 +102,7 @@ class LemmatizeStage(PipelineStage):
         self.lemmatizer = lemmatizer or Lemmatizer()
 
     def process(self, ctx: PipelineContext) -> PipelineContext:
-        """Lematiza os tokens em `ctx.tokens` e reconstrói `ctx.text` como bag of words."""
+        """Lematiza `ctx.tokens` e reconstrói `ctx.text` como bag of words."""
         tokens = ctx.tokens if ctx.tokens else ctx.text.split()
         ctx.tokens = self.lemmatizer.lemmatize(tokens)
         ctx.text = " ".join(ctx.tokens)

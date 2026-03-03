@@ -1,4 +1,4 @@
-"""Módulo de similaridade estrutural via cálculo rápido de Distância de Edição Levenshtein."""
+"""Módulo estrutural via cálculo rápido de Distância de Edição Levenshtein."""
 
 from __future__ import annotations
 
@@ -9,13 +9,13 @@ from .base import SimilarityAlgorithm
 
 class EditDistanceSimilarity(SimilarityAlgorithm):
     """Calcula similaridade baseada em Distância de Edição / Levenshtein.
-    
+
     Utiliza o módulo ultrarrápido rapidfuzz.
     """
 
     def __init__(self, method: str = "ratio") -> None:
         """Inicialização baseada na estratégia de distância a ser utilizada.
-        
+
         Args:
             method: 'ratio' (Levenshtein puro) ou
                 'partial_ratio' (Bom para pedaços inclusos em palavras maiores),

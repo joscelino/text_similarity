@@ -5,7 +5,7 @@ from __future__ import annotations
 
 class StopwordsFilter:
     """Filtro de stopwords em português.
-    
+
     Inclui uma lista nativa leve para evitar dependência obrigatória do NLTK/spaCy.
     """
 
@@ -211,7 +211,7 @@ class StopwordsFilter:
 
     def filter(self, tokens: list[str]) -> list[str]:
         """Recebe uma lista de tokens limpados (sem acento, minúsculos, etc).
-        
+
         Retorna uma nova lista sem as stopwords.
         Preserva as tags de entidade (<money:10> etc).
         """

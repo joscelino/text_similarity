@@ -10,12 +10,12 @@ from ..registry import ExtractorRegistry
 
 class MoneyExtractor(EntityExtractor):
     """Extrator de valores monetários utilizando Regex.
-    
+
     Captura "R$ 30,00", "50 reais", etc.
     """
 
     def extract(self, text: str) -> list[EntityMatch]:
-        """Aplica regex de montantes no string fornecido buscando números precedidos de prefixos monetários."""
+        """Aplica regex de montantes buscando números com prefixos monetários."""
         matches: list[EntityMatch] = []
 
         # Captura toda a cadeia numérica

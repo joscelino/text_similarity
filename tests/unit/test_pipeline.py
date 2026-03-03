@@ -18,13 +18,15 @@ def test_preprocessing_pipeline() -> None:
     # Configura o pipeline invertendo Limpeza e Entidades
     # Entidades devem ser extraídas/normalizadas ANTES da
     # limpeza drástica remover pontuações (vírgulas de dinheiro, pontos de data)
-    pipeline = PreprocessingPipeline([
-        NormalizeEntitiesStage(),
-        CleanTextStage(),
-        TokenizerStage(),
-        StopwordsStage(),
-        LemmatizeStage()
-    ])
+    pipeline = PreprocessingPipeline(
+        [
+            NormalizeEntitiesStage(),
+            CleanTextStage(),
+            TokenizerStage(),
+            StopwordsStage(),
+            LemmatizeStage(),
+        ]
+    )
 
     text = "Eu comprei 2kg de arroz por R$ 30,00 ontem!"
 

@@ -11,14 +11,14 @@ from joblib import Memory
 
 class PipelineCache:
     """Gerenciador de cache para otimização de processamento no pipeline.
-    
+
     Utiliza joblib.Memory para cache em disco (ideal para grandes catálogos) e hashes.
     Implementamos LRU/Memória para deduplicação rápida.
     """
 
     def __init__(self, cache_dir: str | Path | None = None) -> None:
         """Inicializa a estrutura de cache persistente via Joblib.
-        
+
         Args:
         cache_dir: Caminho para diretório de cache. Se None, usa var temporária.
         """
@@ -36,7 +36,7 @@ class PipelineCache:
 
     def hash_text(self, text: str) -> str:
         """Retorna uma chave SHA-256 única para o texto, já minúsculo."""
-        return hashlib.sha256(text.encode('utf-8')).hexdigest()
+        return hashlib.sha256(text.encode("utf-8")).hexdigest()
 
     def clear(self) -> None:
         """Limpa todo o cache em disco mantido pelo Joblib."""

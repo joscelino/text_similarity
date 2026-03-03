@@ -11,7 +11,7 @@ from .base import SimilarityAlgorithm
 
 class CosineSimilarity(SimilarityAlgorithm):
     """Calcula similaridade cosseno utilizando TF-IDF.
-    
+
     Bom para avaliar sobreposição de vocabulário e contexto global.
     """
 

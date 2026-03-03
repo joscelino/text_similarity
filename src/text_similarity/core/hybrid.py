@@ -13,19 +13,24 @@ from .rapidfuzz_cmp import EditDistanceSimilarity
 
 class HybridSimilarity(SimilarityAlgorithm):
     """Calcula uma similaridade combinada (ponderada) utilizando múltiplos.
-    
+
     Modelos disponíveis (TF-IDF Cosseno, Distância de Edição e Fonética).
     """
 
     def __init__(self, weights: dict[str, float] | None = None) -> None:
         """Inicializa agregador de distâncias computacionais simultâneas.
-        
+
         Args:
             weights: Dicionário identificando o peso relativo de cada
                 algoritmo no resultado final.
                 Padrão: {"cosine": 0.4, "edit": 0.4, "phonetic": 0.2}.
         """
-        self.weights = weights or {"cosine": 0.35, "edit": 0.35, "phonetic": 0.15, "entity": 0.15}
+        self.weights = weights or {
+            "cosine": 0.35,
+            "edit": 0.35,
+            "phonetic": 0.15,
+            "entity": 0.15,
+        }
 
         # Normalizando pesos para somarem 1.0
         total_weight = sum(self.weights.values())
@@ -38,12 +43,12 @@ class HybridSimilarity(SimilarityAlgorithm):
             "cosine": CosineSimilarity(),
             "edit": EditDistanceSimilarity(method="ratio"),
             "phonetic": PhoneticSimilarity(),
-            "entity": EntityIntersectionSimilarity()
+            "entity": EntityIntersectionSimilarity(),
         }
 
     def compare(self, text1: str, text2: str) -> float:
         """Soma iterativamente as ponderações de cada algoritmo.
-        
+
         Aplica avaliação de short-circuit via algoritmo de entidade se este
         apontar similaridade total (1.0).
         """
@@ -78,7 +83,4 @@ class HybridSimilarity(SimilarityAlgorithm):
                 details[name] = {"score": score, "weight": self.weights[name]}
                 final_score += score * self.weights[name]
 
-        return {
-            "score": final_score,
-            "details": details
-        }
+        return {"score": final_score, "details": details}

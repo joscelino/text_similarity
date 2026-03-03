@@ -9,7 +9,7 @@ logger = logging.getLogger(__name__)
 
 class Lemmatizer:
     """Lematizador PT-BR.
-    
+
     Tenta utilizar spaCy primeiramente, se disponível, para alta precisão.
     Senão, utiliza NLTK (RSLPStemmer) como fallback que provê Stemming.
     Se nenhum estiver disponível, atua como um pass-through e loga um aviso.
@@ -57,7 +57,7 @@ class Lemmatizer:
 
     def lemmatize(self, tokens: list[str]) -> list[str]:
         """Aplica stemming/lematização aos tokens.
-        
+
         Tags de entidade são ignoradas e retornadas como estão.
         """
         if not tokens:

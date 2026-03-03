@@ -4,6 +4,7 @@ Calcula a interseção entre entidades previamente demarcadas (ex: <productmodel
 nos textos e, caso ocorra interseção total (a busca contida no outro), garante
 um score máximo (short-circuit).
 """
+
 from __future__ import annotations
 
 import re
@@ -36,7 +37,7 @@ class EntityIntersectionSimilarity(SimilarityAlgorithm):
         tags = set()
         for match in re.finditer(pattern, text):
             ent_type, ent_val = match.groups()
-            
+
             # Filtra caso target_entities foi definido
             if self.target_entities is None or ent_type in self.target_entities:
                 tags.add(f"<{ent_type}:{ent_val}>")
@@ -60,7 +61,7 @@ class EntityIntersectionSimilarity(SimilarityAlgorithm):
         # Verifica contenção: se algum valor (sem os delimitadores <tipo: ... >)
         # do menor conjunto está inteiramente contido em algum valor do
         # maior conjunto. Isso ajuda quando as strings de origem colaram
-        # os modelos, ex: <productmodel:PPW38002> in <productmodel:11rnPPW38002tPROFEMUR61650>
+        # os modelos, ex: <productmodel:PPW38002> in <productmodel:PPW38002PROFEMUR>
 
         # Determina qual conjunto tem menos tags (a "busca" provavelmente)
         if len(tags1) <= len(tags2):
@@ -72,7 +73,7 @@ class EntityIntersectionSimilarity(SimilarityAlgorithm):
             # Extrai apenas o valor real mapeado
             # ex: <productmodel:GN500> -> GN500
             s_val = s_tag.split(":", 1)[1][:-1]
-            
+
             # Checa se esse valor existe como substring dentro de algum target_tag
             found = False
             for t_tag in target_tags:
@@ -80,7 +81,7 @@ class EntityIntersectionSimilarity(SimilarityAlgorithm):
                 if s_val in t_val:
                     found = True
                     break
-            
+
             # Como a busca é de contenção PERFECTA (todas as tags buscadas devem
             # ser encontradas para validar o short-circuit), se uma falhar, aborta.
             if not found:

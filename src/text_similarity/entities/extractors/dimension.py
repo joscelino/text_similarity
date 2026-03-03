@@ -12,7 +12,7 @@ class DimensionExtractor(EntityExtractor):
     """Extrator de dimensões físicas (kg, mg, m, cm, l, ml, etc)."""
 
     def extract(self, text: str) -> list[EntityMatch]:
-        """Varre o texto utilizando expressões regulares buscando medidas numéricas associadas a unidades físicas."""
+        """Varre o texto com regex buscando medidas associadas a unidades."""
         matches: list[EntityMatch] = []
 
         # Ex: "2kg", "1.5m", "30 cm"

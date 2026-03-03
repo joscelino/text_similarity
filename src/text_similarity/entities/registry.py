@@ -9,7 +9,7 @@ from .base import EntityExtractor
 
 class ExtractorRegistry:
     """Registro centralizado de extratores de entidades.
-    
+
     Permite acoplar e invocar extratores pelo nome (ex: 'money', 'date').
     """
 

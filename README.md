@@ -103,6 +103,27 @@ for r in resultados:
     print(f"Score: {r['score']:.2f} | Match: {r['candidate']}")
 ```
 
+### Uso Apenas para Tratamento de Texto
+Se o seu objetivo não for realizar comparações, mas apenas aproveitar o robusto motor de processamento em português (para limpar bases de dados, treinar modelos, remover acentos, expandir contrações e lematizar), você pode instanciar as etapas da `Pipeline` de forma autônoma e oficial:
+
+```python
+from text_similarity.pipeline.pipeline import PreprocessingPipeline
+from text_similarity.pipeline.backends import CleanTextStage, TokenizerStage, StopwordsStage
+
+# Monte seu pipeline customizado apenas com o que precisa:
+pipeline = PreprocessingPipeline([
+    CleanTextStage(),  # Expansão de contrações ("vc" -> "você"), sem acentos, lowercase
+    TokenizerStage(),  # Tokenização segura
+    StopwordsStage()   # Remoção de conectivos inúteis do PT-BR
+])
+
+texto_bruto = "Limpando meeu texto, crz... vc viu a promo???"
+texto_tratado, stats = pipeline.process(texto_bruto)
+
+print(texto_tratado)
+# Saída esperada (bag of words tratado): "limpar texto crz ver promo"
+```
+
 ### Entendendo "Por que" deram Match (Explain)
 Às vezes você precisa debugar a intenção do usuário ou mostrar evidências de que o cruzamento de algoritmos detectou semelhança. Use o `.explain()`:
 

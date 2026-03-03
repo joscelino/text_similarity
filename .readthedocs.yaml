@@ -9,8 +9,13 @@ build:
   tools:
     python: "3.11"
 
-# Instala o pacote e as dependências de documentação (extras [doc] quando disponíveis)
+# Instala o pacote e as dependências para build da documentação
 python:
   install:
     - method: pip
       path: .
+    - requirements: mkdocs_docs/requirements.txt
+
+# Aponta para o arquivo de configuração do MkDocs
+mkdocs:
+  configuration: mkdocs.yml

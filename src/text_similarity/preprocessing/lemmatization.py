@@ -23,12 +23,12 @@ class Lemmatizer:
 
         # 1. Tentar spaCy (Requer: spacy e pt_core_news_sm)
         try:
-            import spacy  # pragma: no cover
+            import spacy
 
             # Tentar carregar o modelo PT
-            self._nlp = spacy.load("pt_core_news_sm")  # pragma: no cover
-            self.backend = "spacy"  # pragma: no cover
-            return  # pragma: no cover
+            self._nlp = spacy.load("pt_core_news_sm")
+            self.backend = "spacy"
+            return
         except ImportError:
             pass
         except OSError:
@@ -37,13 +37,13 @@ class Lemmatizer:
 
         # 2. Tentar NLTK Stemmer
         try:
-            from nltk.stem import RSLPStemmer  # pragma: no cover
+            from nltk.stem import RSLPStemmer
 
             # Tenta instanciar para ver se os dados estão baixados
             try:
-                self._stemmer = RSLPStemmer()  # pragma: no cover
-                self.backend = "nltk"  # pragma: no cover
-                return  # pragma: no cover
+                self._stemmer = RSLPStemmer()
+                self.backend = "nltk"
+                return
             except LookupError:
                 # Necessita: nltk.download('rslp') e nltk.download('punkt')
                 pass

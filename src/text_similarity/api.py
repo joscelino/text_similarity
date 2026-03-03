@@ -289,12 +289,13 @@ class Comparator:
                 )
             else:
                 # Fallback, executa o método comum (mas como é batch esperamos Hybrid)
-                _score = self.algorithm.compare(p_text, c_p_text)
                 results.append(
                     {
                         "candidate": cand["candidate"],
-                        "score": _score,
-                        "details": {"algorithm": _score},
+                        "score": self.algorithm.compare(p_text, c_p_text),
+                        "details": {
+                            "algorithm": self.algorithm.compare(p_text, c_p_text)
+                        },
                     }
                 )
 

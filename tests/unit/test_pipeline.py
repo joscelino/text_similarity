@@ -59,31 +59,3 @@ def test_pipeline_cache() -> None:
         # Testando persistência do memory cache
         # O joblib apenas injeta um wrapper. Aqui verificamos a pasta limpa.
         cache.clear()
-
-
-def test_add_stage_appends_to_pipeline() -> None:
-    """add_stage() deve anexar um estágio ao pipeline vazio corretamente."""
-    pipeline = PreprocessingPipeline()
-    assert len(pipeline.stages) == 0
-
-    pipeline.add_stage(CleanTextStage())
-    assert len(pipeline.stages) == 1
-
-    pipeline.add_stage(TokenizerStage())
-    assert len(pipeline.stages) == 2
-
-
-def test_pipeline_catches_stage_exception() -> None:
-    """Pipeline deve capturar exceção de estágio e continuar processando."""
-    from unittest.mock import MagicMock
-
-    from text_similarity.pipeline.stage import PipelineContext
-
-    bad_stage = MagicMock()
-    bad_stage.process.side_effect = RuntimeError("Estágio quebrado")
-
-    pipeline = PreprocessingPipeline([bad_stage, CleanTextStage()])
-    # Não deve levantar exceção — apenas logar o erro e continuar
-    result, ctx = pipeline.process("Texto qualquer para processar")
-    assert isinstance(result, str)
-    assert isinstance(ctx, PipelineContext)

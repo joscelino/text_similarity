@@ -80,10 +80,9 @@ class TestExplainEndToEnd:
     """Cenários end-to-end para o método explain()."""
 
     def test_explain_smart_mode_full_structure(self) -> None:
-        """explain() no modo smart deve retornar estrutura completa (sem short-circuit)."""
+        """explain() no modo smart deve retornar estrutura completa."""
         comp = Comparator.smart()
-        # Par sem entidades detectáveis para garantir que não ativa o short-circuit
-        result = comp.explain("cadeira de escritorio ergonomica", "cadeira giratoria de escritorio")
+        result = comp.explain("televisão samsung 55 polegadas", 'tv samsung 55"')
 
         assert "score" in result
         assert "details" in result

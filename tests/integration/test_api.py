@@ -33,7 +33,7 @@ def test_comparator_smart() -> None:
 def test_comparator_explain() -> None:
     comp = Comparator.smart()
 
-    result = comp.explain("cadeira de escritorio ergonomica", "cadeira giratoria de escritorio")
+    result = comp.explain("televisão samsung 55 polegadas", 'tv samsung 55"')
 
     assert "score" in result
     assert "details" in result

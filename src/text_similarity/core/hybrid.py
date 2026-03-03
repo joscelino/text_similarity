@@ -75,21 +75,6 @@ class HybridSimilarity(SimilarityAlgorithm):
         if not text1 or not text2:
             return {"score": 0.0, "details": {}}
 
-        # Short-circuit de entidade — mesmo comportamento do compare()
-        if "entity" in self.weights and self.weights["entity"] > 0:
-            entity_score = self.algorithms["entity"].compare(text1, text2)
-            if entity_score >= 1.0:
-                return {
-                    "score": 0.95,
-                    "details": {
-                        "entity": {
-                            "score": entity_score,
-                            "weight": self.weights["entity"],
-                            "short_circuit": True,
-                        }
-                    },
-                }
-
         details = {}
         final_score = 0.0
         for name, alg in self.algorithms.items():

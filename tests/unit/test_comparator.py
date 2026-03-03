@@ -152,10 +152,9 @@ class TestComparatorExplain:
         assert "details" in result
 
     def test_explain_details_contains_all_algorithms(self) -> None:
-        """explain() no modo smart deve detalhar os 3 algoritmos (sem short-circuit)."""
+        """explain() no modo smart deve detalhar os 3 algoritmos."""
         comp = Comparator.smart()
-        # Par sem entidades detectáveis para garantir que não ativa o short-circuit
-        result = comp.explain("cadeira de madeira", "mesa de madeira rustica")
+        result = comp.explain("televisão lg 55", "tv lg 55 polegadas")
         assert "cosine" in result["details"]
         assert "edit" in result["details"]
         assert "phonetic" in result["details"]

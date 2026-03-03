@@ -22,6 +22,16 @@ def test_edit_distance_partial() -> None:
     assert score == 1.0
 
 
+def test_edit_distance_token_sort_ratio() -> None:
+    """token_sort_ratio deve tratar textos com mesmas palavras em ordem diferente."""
+    algo = EditDistanceSimilarity(method="token_sort_ratio")
+    # Mesmas palavras, ordem diferente — token_sort_ratio normaliza para 1.0
+    score = algo.compare("iphone 13 pro max", "pro max iphone 13")
+    assert score == 1.0
+    # Textos completamente diferentes devem ter score baixo
+    assert algo.compare("geladeira electrolux", "foguete lunar") < 0.5
+
+
 def test_cosine_similarity() -> None:
     algo = CosineSimilarity(ngram_range=(1, 1))
     score = algo.compare("rato grande amarelo", "rato grand eamarelo")

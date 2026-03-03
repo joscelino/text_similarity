@@ -74,3 +74,17 @@ def test_lemmatization_fallback() -> None:
     # Dependendo do que tem instalado na máquina de teste (provavelmente 'none')
     if lemmatizer.backend == "none":
         assert lemmas[0] == "gostou"
+
+
+def test_stopwords_custom_words_are_filtered() -> None:
+    """StopwordsFilter com custom_stopwords deve filtrar as palavras customizadas."""
+    custom = {"produto", "especial"}
+    filter_sw = StopwordsFilter(custom_stopwords=custom)
+
+    tokens = ["produto", "especial", "geladeira", "de"]
+    filtered = filter_sw.filter(tokens)
+
+    assert "produto" not in filtered   # Removido como custom stopword
+    assert "especial" not in filtered  # Removido como custom stopword
+    assert "geladeira" in filtered     # Mantido
+    assert "de" not in filtered        # Removido como stopword padrão

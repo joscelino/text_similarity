@@ -137,6 +137,12 @@ print(detalhes["details"])
 # {'cosine': 0.82, 'edit': 0.80, 'phonetic': 0.95} -> Foneticamente altíssimo e detectada dimensão de 55.
 ```
 
+> **Comportamento com strings vazias:** `explain("", "qualquer texto")` retorna `{"score": 0.0, "details": {}}` sem lançar exceção.
+
+> **Short-circuit no `explain()`:** Quando uma entidade é detectada com interseção total (ex: busca por `<productmodel:GN500>` encontrada no texto alvo), `explain()` retorna `{"score": 0.95, "details": {"entity": {..., "short_circuit": True}}}`, igualmente ao `compare()`.
+
+> **`compare_batch()` com lista vazia:** `comp.compare_batch("qualquer", [])` retorna `[]` imediatamente, sem processamento.
+
 ## 🎯 Interpretação dos Scores
 
 O score retornado varia entre `0.0` (completamente diferentes) e `1.0` (idênticos).

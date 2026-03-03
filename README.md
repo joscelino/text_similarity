@@ -103,6 +103,21 @@ for r in resultados:
     print(f"Score: {r['score']:.2f} | Match: {r['candidate']}")
 ```
 
+### Entendendo "Por que" deram Match (Explain)
+Às vezes você precisa debugar a intenção do usuário ou mostrar evidências de que o cruzamento de algoritmos detectou semelhança. Use o `.explain()`:
+
+```python
+from text_similarity.api import Comparator
+comp = Comparator.smart()
+
+detalhes = comp.explain("televisão samsung 55 polegadas", "tv samsung 55\"")
+
+print(detalhes["score"])
+# 0.85
+print(detalhes["details"])
+# {'cosine': 0.82, 'edit': 0.80, 'phonetic': 0.95} -> Foneticamente altíssimo e detectada dimensão de 55.
+```
+
 ### Uso Apenas para Tratamento de Texto
 Se o seu objetivo não for realizar comparações, mas apenas aproveitar o robusto motor de processamento em português (para limpar bases de dados, treinar modelos, remover acentos, expandir contrações e lematizar), você pode instanciar as etapas da `Pipeline` de forma autônoma e oficial:
 
@@ -122,21 +137,6 @@ texto_tratado, stats = pipeline.process(texto_bruto)
 
 print(texto_tratado)
 # Saída esperada (bag of words tratado): "limpar texto crz ver promo"
-```
-
-### Entendendo "Por que" deram Match (Explain)
-Às vezes você precisa debugar a intenção do usuário ou mostrar evidências de que o cruzamento de algoritmos detectou semelhança. Use o `.explain()`:
-
-```python
-from text_similarity.api import Comparator
-comp = Comparator.smart()
-
-detalhes = comp.explain("televisão samsung 55 polegadas", "tv samsung 55\"")
-
-print(detalhes["score"])
-# 0.85
-print(detalhes["details"])
-# {'cosine': 0.82, 'edit': 0.80, 'phonetic': 0.95} -> Foneticamente altíssimo e detectada dimensão de 55.
 ```
 
 ## 🎯 Interpretação dos Scores

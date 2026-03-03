@@ -118,6 +118,19 @@ print(detalhes["details"])
 # {'cosine': 0.82, 'edit': 0.80, 'phonetic': 0.95} -> Foneticamente altíssimo e detectada dimensão de 55.
 ```
 
+## 🎯 Interpretação dos Scores
+
+O score retornado varia entre `0.0` (completamente diferentes) e `1.0` (idênticos).
+
+| Faixa | Interpretação |
+|---|---|
+| `>= 0.85` | Match muito forte — provável duplicata ou variação mínima de descrição |
+| `0.60 – 0.84` | Match provável — mesmo item com descrição diferente (ex: código com/sem espaço) |
+| `0.35 – 0.59` | Match incerto — requer revisão manual |
+| `< 0.35` | Sem relação semântica relevante |
+
+> **Dica:** Para domínios com códigos de produto (materiais, SKUs, peças técnicas), um threshold de `>= 0.60` é um bom ponto de partida. Calibre com pares conhecidos do seu domínio para ajustar precisão × recall.
+
 ### Uso Apenas para Tratamento de Texto
 Se o seu objetivo não for realizar comparações, mas apenas aproveitar o robusto motor de processamento em português (para limpar bases de dados, treinar modelos, remover acentos, expandir contrações e lematizar), você pode instanciar as etapas da `Pipeline` de forma autônoma e oficial:
 
@@ -138,19 +151,6 @@ texto_tratado, stats = pipeline.process(texto_bruto)
 print(texto_tratado)
 # Saída esperada (bag of words tratado): "limpar texto crz ver promo"
 ```
-
-## 🎯 Interpretação dos Scores
-
-O score retornado varia entre `0.0` (completamente diferentes) e `1.0` (idênticos).
-
-| Faixa | Interpretação |
-|---|---|
-| `>= 0.85` | Match muito forte — provável duplicata ou variação mínima de descrição |
-| `0.60 – 0.84` | Match provável — mesmo item com descrição diferente (ex: código com/sem espaço) |
-| `0.35 – 0.59` | Match incerto — requer revisão manual |
-| `< 0.35` | Sem relação semântica relevante |
-
-> **Dica:** Para domínios com códigos de produto (materiais, SKUs, peças técnicas), um threshold de `>= 0.60` é um bom ponto de partida. Calibre com pares conhecidos do seu domínio para ajustar precisão × recall.
 
 ---
 

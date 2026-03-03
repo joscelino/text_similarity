@@ -60,3 +60,37 @@ def test_hybrid_similarity() -> None:
     assert "score" in explanation
     assert "cosine" in explanation["details"]
     assert "edit" in explanation["details"]
+
+
+def test_cosine_custom_ngram_range() -> None:
+    """CosineSimilarity deve funcionar com ngram_range customizado."""
+    algo_unigram = CosineSimilarity(ngram_range=(1, 1))
+    algo_bigram = CosineSimilarity(ngram_range=(2, 2))
+
+    t1, t2 = "telefone celular samsung", "celular samsung galaxy"
+
+    score_uni = algo_unigram.compare(t1, t2)
+    score_bi = algo_bigram.compare(t1, t2)
+
+    # Ambos devem retornar float válido no range [0.0, 1.0]
+    assert 0.0 <= score_uni <= 1.0
+    assert 0.0 <= score_bi <= 1.0
+    # Unigrama tende a dar score maior (mais termos em comum individualmente)
+    assert score_uni >= score_bi
+
+
+def test_hybrid_explain_short_circuit_consistent_with_compare() -> None:
+    """explain() deve retornar o mesmo score que compare() no short-circuit."""
+    algo = HybridSimilarity()
+
+    # Tags de entidade para forçar o short-circuit (entity_score == 1.0)
+    t1 = "<productmodel:GN500>"
+    t2 = "<productmodel:GN500> outros termos no texto"
+
+    score_compare = algo.compare(t1, t2)
+    result_explain = algo.explain(t1, t2)
+
+    assert score_compare == pytest.approx(result_explain["score"])
+    # Quando há short-circuit, o score deve ser 0.95
+    assert result_explain["score"] == pytest.approx(0.95)
+    assert result_explain["details"]["entity"]["short_circuit"] is True

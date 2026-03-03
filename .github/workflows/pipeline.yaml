@@ -1,0 +1,40 @@
+name: CI Pipeline
+
+# O workflow roda exclusivamente na branch main
+on:
+  push:
+    branches: ["main"]
+  pull_request:
+    branches: ["main"]
+
+jobs:
+  test-and-lint:
+    name: Lint & Test
+    runs-on: ubuntu-latest
+
+    steps:
+      # 1. Checkout do código (puxa o repositório para a máquina virtual)
+      - name: Checkout Repository
+        uses: actions/checkout@v4
+
+      # 2. Instala o 'uv' usando a action oficial da Astral
+      - name: Setup uv
+        uses: astral-sh/setup-uv@v5
+
+      # 3. Setup nativo do Python 3.12 via setup-python integrado
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      # 4. Sincroniza dependências (incluindo pacotes e dependências test/dev)
+      - name: Install Dependencies
+        run: uv sync --all-extras --dev
+
+      # 5. Roda o lint e analisador estático (Ruff)
+      - name: Run Ruff Linter
+        run: uv run ruff check src tests
+
+      # 6. Roda a suite integral de testes unitários
+      - name: Run Pytest
+        run: uv run pytest tests/

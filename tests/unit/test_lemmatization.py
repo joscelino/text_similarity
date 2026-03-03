@@ -2,7 +2,6 @@
 
 from unittest.mock import MagicMock, patch
 
-
 # --- Testes do branch pas-through (backend "none") ---
 
 

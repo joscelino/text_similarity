@@ -68,7 +68,7 @@ class Comparator:
         if self.mode == "smart":
             # Dá peso maior para a fonética e entidades exatas (tokens)
             self.algorithm: SimilarityAlgorithm = HybridSimilarity(
-                weights={"cosine": 0.45, "edit": 0.35, "phonetic": 0.20}
+                weights={"cosine": 0.45, "edit": 0.25, "phonetic": 0.20, "entity": 0.10}
             )
         else:
             self.algorithm = HybridSimilarity(

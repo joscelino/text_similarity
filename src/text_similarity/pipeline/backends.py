@@ -32,15 +32,13 @@ class NormalizeEntitiesStage(PipelineStage):
     # Limite de 4 letras exclui palavras PT-BR comuns (BALAO=5, CATETER=7)
     # enquanto cobre siglas típicas: RFX, APC, HP, LG, 3M, S (Galaxy S).
     # O sufixo deve conter obrigatoriamente letras E dígitos.
-    # Ex válidos  : "RFX 765J9", "S 22Ultra", "HP Z2G9"
+    # Ex válidos  : "RFX 765J9", "S 22Ultra", "HP Z2G9", "GN 500"
     # Ex inválidos: "BALAO RFX765J9" (5 letras), "Custou 30" (sufixo só numérico)
     _MODEL_SPACE_RE = re.compile(
         r"\b([A-Za-z]{2,4})"       # grupo 1: sigla curta (2-4 letras)
-        r"\s"                       # espaço
-        r"("                        # grupo 2: sufixo misto (letras+dígitos)
-        r"(?=[A-Za-z\d]*[A-Za-z][A-Za-z\d]*\d"   # tem letras... e dígito
-        r"|[A-Za-z\d]*\d[A-Za-z\d]*[A-Za-z])"    # ou dígito... e letras
-        r"[A-Za-z\d]+(?:[-][A-Za-z\d]+)*"        # captura o sufixo real
+        r"\s+"                     # um ou mais espaços
+        r"("                       # grupo 2: sufixo longo que OBRIGATORIAMENTE contenha números
+        r"(?=[A-Za-z\d]*\d)[A-Za-z\d]+(?:[-][A-Za-z\d]+)*"
         r")"
         r"\b"
     )

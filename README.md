@@ -15,6 +15,7 @@ Uma biblioteca Python otimizada e especializada na comparação de similaridade 
   - *Cosseno (TF-IDF)*: Para variação lexical.
   - *Distância de Edição (Levenshtein)*: Rápido, usando `rapidfuzz` para detectar erros de digitação.
   - *Fonética (Metaphone PT-BR adaptado)*: Trata "cassaa" e "caça" como pesos idênticos.
+  - *Interseção de Entidades*: Lógica de "Curto-Circuito" que garante correspondência (score altíssimo) se a entidade de busca essencial (ex: `GN500`) for validada intacta em textos mais longos.
 - **Pipeline Otimizada (Joblib Cache):** Suporte a cache em disco nativo. Textos volumosos já mastigados nas etapas de Regex/SpaCy não gastam processamento de novo.
 
 ---
@@ -71,6 +72,13 @@ novo_score = comp.compare("Foi me cobrado 30 reais", "O preço é R$ 30,00")
 
 print(f"Similaridade Smart: {novo_score:.2f}") 
 # Resultado alto por conta da identificação da entidade financeira exata
+
+# --- Novo Recurso: Interseção Perfeita de Modelos (Short-circuit) ---
+score_modelo = comp.compare("GN500", "Temos as peças GN 500, GN 1000 e SK 200")
+print(f"Score Modelo Embutido: {score_modelo:.2f}")
+# Resultado: ~0.95. Ao localizar o modelo procurado "GN500" isolado no meio do 
+# texto longo alvo, o algoritmo de intersecção assegura diretamente uma alta 
+# pontuação, ignorando todo o resto da string longa que causaria diluição.
 ```
 
 ### Entendendo "Por que" deram Match (Explain)

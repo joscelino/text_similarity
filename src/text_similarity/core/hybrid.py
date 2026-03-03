@@ -6,6 +6,7 @@ from typing import Any
 
 from .base import SimilarityAlgorithm
 from .cosine import CosineSimilarity
+from .entity_overlap import EntityIntersectionSimilarity
 from .phonetic import PhoneticSimilarity
 from .rapidfuzz_cmp import EditDistanceSimilarity
 
@@ -24,7 +25,7 @@ class HybridSimilarity(SimilarityAlgorithm):
                 algoritmo no resultado final.
                 Padrão: {"cosine": 0.4, "edit": 0.4, "phonetic": 0.2}.
         """
-        self.weights = weights or {"cosine": 0.4, "edit": 0.4, "phonetic": 0.2}
+        self.weights = weights or {"cosine": 0.35, "edit": 0.35, "phonetic": 0.15, "entity": 0.15}
 
         # Normalizando pesos para somarem 1.0
         total_weight = sum(self.weights.values())
@@ -36,13 +37,25 @@ class HybridSimilarity(SimilarityAlgorithm):
         self.algorithms = {
             "cosine": CosineSimilarity(),
             "edit": EditDistanceSimilarity(method="ratio"),
-            "phonetic": PhoneticSimilarity()
+            "phonetic": PhoneticSimilarity(),
+            "entity": EntityIntersectionSimilarity()
         }
 
     def compare(self, text1: str, text2: str) -> float:
-        """Soma iterativamente as ponderações de cada algoritmo."""
+        """Soma iterativamente as ponderações de cada algoritmo.
+        
+        Aplica avaliação de short-circuit via algoritmo de entidade se este
+        apontar similaridade total (1.0).
+        """
         if not text1 or not text2:
             return 0.0
+
+        # Avaliação de short-circuit para entidades (ex: product models)
+        if "entity" in self.weights and self.weights["entity"] > 0:
+            entity_score = self.algorithms["entity"].compare(text1, text2)
+            if entity_score >= 1.0:
+                # Se houver contenção total da entidade procurada, assegura alto score
+                return 0.95
 
         final_score = 0.0
         for name, alg in self.algorithms.items():

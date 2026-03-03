@@ -81,6 +81,25 @@ print(f"Score Modelo Embutido: {score_modelo:.2f}")
 # pontuação, ignorando todo o resto da string longa que causaria diluição.
 ```
 
+#### Filtrando Entidades Específicas
+
+Por padrão, o modo `smart` ativa **todos** os extratores (`money`, `date`, `dimension`, `number`, `product_model`). Você pode restringir apenas às entidades relevantes para o seu domínio passando o parâmetro `entities`:
+
+```python
+from text_similarity.api import Comparator
+
+# Apenas modelos de produto — ideal para catálogos de peças técnicas
+comp = Comparator.smart(entities=["product_model"])
+
+# Apenas valores monetários — ideal para sistemas financeiros
+comp_fin = Comparator.smart(entities=["money", "number"])
+
+# Datas e dimensões — ideal para laudos e fichas técnicas
+comp_lab = Comparator.smart(entities=["date", "dimension"])
+```
+
+> **Dica:** Filtrar entidades melhora a precisão evitando falsos positivos. Um extrator de `date` ativo num catálogo de produtos pode mapear incorretamente SKUs contendo dígitos de ano.
+
 ### Processamento em Lote (Batch)
 Para casos de uso onde é necessário comparar uma *query* contra centenas ou milhares de candidatos, utilize o método `compare_batch`. Ele é altamente otimizado aplicando matrizes esparsas via Scikit-Learn e descartes (short-circuit) matemáticos. Entregando resultados consolidados até **~48x mais rápido** dependendo do volume.
 
@@ -118,6 +137,12 @@ print(detalhes["details"])
 # {'cosine': 0.82, 'edit': 0.80, 'phonetic': 0.95} -> Foneticamente altíssimo e detectada dimensão de 55.
 ```
 
+> **Comportamento com strings vazias:** `explain("", "qualquer texto")` retorna `{"score": 0.0, "details": {}}` sem lançar exceção.
+
+> **Short-circuit no `explain()`:** Quando uma entidade é detectada com interseção total (ex: busca por `<productmodel:GN500>` encontrada no texto alvo), `explain()` retorna `{"score": 0.95, "details": {"entity": {..., "short_circuit": True}}}`, igualmente ao `compare()`.
+
+> **`compare_batch()` com lista vazia:** `comp.compare_batch("qualquer", [])` retorna `[]` imediatamente, sem processamento.
+
 ## 🎯 Interpretação dos Scores
 
 O score retornado varia entre `0.0` (completamente diferentes) e `1.0` (idênticos).
@@ -154,9 +179,77 @@ print(texto_tratado)
 
 ---
 
-## Configuração do Cache Local
+## ⚙️ Configuração do Cache
 
-A biblioteca expõe opções de cache na largada de configuração (Memory de Disco usando hashlib/Joblib).  Ao passar `use_cache=True` para os construtores de classe, hashes em SHA-256 previnem as longas travadas do motor de Regex ou SpaCy de recalcular um payload que o serviço de NLP submeteu recentemente.
+A biblioteca mantém um cache in-memory (SHA-256) para evitar reprocessar o mesmo texto várias vezes pelo pipeline. Por padrão, o cache está **ativado**.
+
+```python
+from text_similarity.api import Comparator
+
+# Cache ativado por padrão (padrão)
+comp = Comparator.smart(use_cache=True)
+
+# Desativar o cache (útil em ambientes com memória limitada ou testes)
+comp_no_cache = Comparator.smart(use_cache=False)
+```
+
+### Limpando o Cache Manualmente
+
+Use `clear_cache()` quando precisar forçar o reprocessamento — por exemplo, depois de alterar as entidades ativas ou ao liberar memória após um lote grande:
+
+```python
+comp = Comparator.smart()
+
+# Processa e armazena em cache
+comp.compare("produto A", "produto B")
+
+# Libera toda a memória do cache in-memory e limpa o cache em disco (Joblib)
+comp.clear_cache()
+```
+
+---
+
+## 🔌 Extensibilidade — Registrando Entidades Customizadas
+
+A biblioteca expõe o `ExtractorRegistry` para registrar extratores de entidade personalizados, sem precisar alterar o código-fonte:
+
+```python
+from text_similarity.entities.base import EntityExtractor, EntityMatch
+from text_similarity.entities.registry import ExtractorRegistry
+
+class CPFExtractor(EntityExtractor):
+    """Exemplo: extrator de CPF para sistemas de RH."""
+
+    def extract(self, text: str) -> list[EntityMatch]:
+        import re
+        matches = []
+        for m in re.finditer(r"\d{3}\.\d{3}\.\d{3}-\d{2}", text):
+            matches.append(EntityMatch(
+                entity_type="cpf",
+                text_matched=m.group(),
+                value=m.group().replace(".", "").replace("-", ""),
+                start=m.start(),
+                end=m.end(),
+            ))
+        return matches
+
+# Registra o extrator customizado
+ExtractorRegistry.register("cpf", CPFExtractor)
+
+# Instancia o Comparator ativando apenas o seu extrator
+comp = Comparator.smart(entities=["cpf"])
+score = comp.compare("019.283.847-09", "documento cpf 01928384709")
+```
+
+Extratores disponíveis por padrão:
+
+| Nome | Exemplos detectados |
+|---|---|
+| `money` | `R$ 30,00`, `50 reais`, `USD 100` |
+| `date` | `12/03/2023`, `ontem`, `amanhã`, `25 de abril` |
+| `dimension` | `2kg`, `1.5l`, `30cm`, `10m²` |
+| `number` | `3`, `três`, `1000` |
+| `product_model` | `S22 Ultra`, `iPhone 13`, `XJ-900` |
 
 
 ## Contribuindo

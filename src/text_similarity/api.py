@@ -288,13 +288,17 @@ class Comparator:
                     }
                 )
             else:
-                # Fallback, executa o método comum (mas como é batch esperamos Hybrid)
+                # Fallback genérico: qualquer SimilarityAlgorithm não-Hybrid
+                _score = self.algorithm.compare(p_text, c_p_text)
                 results.append(
                     {
                         "candidate": cand["candidate"],
-                        "score": self.algorithm.compare(p_text, c_p_text),
+                        "score": _score,
                         "details": {
-                            "algorithm": self.algorithm.compare(p_text, c_p_text)
+                            type(self.algorithm).__name__: {
+                                "score": _score,
+                                "weight": 1.0,
+                            }
                         },
                     }
                 )

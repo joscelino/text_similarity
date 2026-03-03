@@ -110,3 +110,22 @@ def test_normalizer() -> None:
     assert "<date:" in normalized
     # A palavra 'ontem' deve ter sumido do texto
     assert "ontem" not in normalized
+
+
+def test_registry_invalid_extractor_raises() -> None:
+    """get_extractor() com nome inexistente deve levantar ValueError."""
+    import pytest
+
+    from text_similarity.entities.registry import ExtractorRegistry
+
+    with pytest.raises(ValueError, match="não registrado"):
+        ExtractorRegistry.get_extractor("extrator_que_nao_existe")
+
+
+def test_registry_available_extractors_contains_defaults() -> None:
+    """available_extractors() deve listar os 5 extratores padrão da lib."""
+    from text_similarity.entities.registry import ExtractorRegistry
+
+    available = ExtractorRegistry.available_extractors()
+    for name in ["date", "dimension", "money", "number", "product_model"]:
+        assert name in available

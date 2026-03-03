@@ -1,0 +1,58 @@
+name: Publish to PyPI
+
+# Executa apenas quando uma release é publicada no GitHub
+on:
+  release:
+    types: [published]
+
+jobs:
+  build:
+    name: Build Distribution
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v4
+
+      - name: Setup uv
+        uses: astral-sh/setup-uv@v5
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install Dependencies
+        run: uv sync --all-extras --dev
+
+      - name: Build Package
+        run: uv build
+
+      - name: Upload Distribution Artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: python-package-distributions
+          path: dist/
+
+  publish-to-pypi:
+    name: Publish to PyPI
+    needs: build
+    runs-on: ubuntu-latest
+
+    # Usa Trusted Publisher (OIDC) — sem necessidade de API token
+    environment:
+      name: pypi
+      url: https://pypi.org/p/text-similarity
+
+    permissions:
+      id-token: write  # Obrigatório para autenticação OIDC com PyPI
+
+    steps:
+      - name: Download Distribution Artifacts
+        uses: actions/download-artifact@v4
+        with:
+          name: python-package-distributions
+          path: dist/
+
+      - name: Publish to PyPI
+        uses: pypa/gh-action-pypi-publish@release/v1

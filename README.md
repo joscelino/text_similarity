@@ -2,6 +2,7 @@
 
 [![CI Pipeline](https://github.com/joscelino/text_similarity/actions/workflows/pipeline.yaml/badge.svg)](https://github.com/joscelino/text_similarity/actions/workflows/pipeline.yaml)
 [![Docs](https://readthedocs.org/projects/text-similarity/badge/?version=latest)](https://text-similarity.readthedocs.io/pt-br/latest/)
+[![PyPI](https://img.shields.io/pypi/v/text-similarity-br)](https://pypi.org/project/text-similarity-br/)
 [![Python](https://img.shields.io/badge/python-3.8%20|%203.9%20|%203.10%20|%203.11%20|%203.12-blue)](https://www.python.org)
 [![Ruff](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/astral-sh/ruff/main/assets/badge/v2.json)](https://github.com/astral-sh/ruff)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
@@ -29,24 +30,21 @@ Uma biblioteca Python otimizada e especializada na comparação de similaridade 
 ## Requisitos
 
 - **Python:** \>= 3.8
-- Instalação via [uv](https://github.com/astral-sh/uv) (Recomendado) ou `pip`.
 
 ---
 
 ## 🚀 Instalação
 
 ```bash
-# Clone ou baixe o projeto
-uv sync
-
-# Ative o ambiente virtual
-# Windows:
-.venv\Scripts\activate
-# Linux/MacOS:
-source .venv/bin/activate
+pip install text-similarity-br
 ```
 
-*(Nota: Adicione o modelo SpaCy opcional e de alta precisão com o comando `python -m spacy download pt_core_news_sm`)*
+Com suporte a lematização via SpaCy (opcional):
+
+```bash
+pip install "text-similarity-br[nlp]"
+python -m spacy download pt_core_news_sm
+```
 
 ---
 

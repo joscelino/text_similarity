@@ -126,6 +126,42 @@ for r in resultados:
     print(f"Score: {r['score']:.2f} | Match: {r['candidate']}")
 ```
 
+### Comparação Multi-Query (`compare_many_to_many`)
+Quando você precisa comparar **múltiplas buscas** contra o mesmo catálogo de candidatos, use `compare_many_to_many`. Ele pré-computa a matriz TF-IDF dos candidatos **uma única vez**, eliminando recálculos redundantes e entregando speedups significativos em cenários de alto volume.
+
+```python
+from text_similarity.api import Comparator
+comp = Comparator.smart()
+
+buscas = [
+    "Notebook Dell Inspiron 15",
+    "Mouse sem fio logitech",
+    "Monitor Samsung 27 polegadas",
+]
+candidatos = [
+    "Dell Inspiron 15 polegadas i5",
+    "Notebook Lenovo Thinkpad",
+    "Mouse logitech wireless",
+    "Monitor Samsung 27'' 4K",
+    # ... milhares de itens
+]
+
+# Retorna uma lista de resultados para CADA query
+todos_resultados = comp.compare_many_to_many(
+    buscas, candidatos, top_n=5, min_cosine=0.1
+)
+
+for query, resultados in zip(buscas, todos_resultados):
+    print(f"\n🔍 Query: {query}")
+    for r in resultados:
+        print(f"  Score: {r['score']:.2f} | {r['candidate']}")
+```
+
+> **Quando usar qual?**
+> - `compare_batch()` → 1 query × N candidatos (ex: busca textual de um usuário).
+> - `compare_many_to_many()` → M queries × N candidatos (ex: deduplicação em lote, cruzamento de bases).
+
+
 ### Entendendo "Por que" deram Match (Explain)
 Às vezes você precisa debugar a intenção do usuário ou mostrar evidências de que o cruzamento de algoritmos detectou semelhança. Use o `.explain()`:
 

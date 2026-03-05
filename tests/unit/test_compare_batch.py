@@ -66,3 +66,31 @@ def test_compare_batch_min_cosine_filter(smart_comp):
         assert "mesa" in r["candidate"] or "madeira" in r["candidate"]
 
     assert len(results) < len(candidates)
+
+
+def test_compare_batch_strategy_vectorized(smart_comp):
+    query = "Comprei um iPhone 13"
+    candidates = [
+        "celular iphone 13 novo",
+        "samsung galaxy s22",
+        "comprei o iphone 13 ontem",
+    ]
+
+    results = smart_comp.compare_batch(
+        query, candidates, top_n=3, min_cosine=0.0, strategy="vectorized"
+    )
+
+    assert len(results) > 0
+    assert "iphone 13" in results[0]["candidate"].lower()
+
+
+def test_compare_batch_invalid_strategy(smart_comp):
+    with pytest.raises(ValueError, match="não suportada"):
+        smart_comp.compare_batch(
+            "qualquer", ["texto"], strategy="invalida"
+        )
+
+
+def test_compare_batch_empty_candidates(smart_comp):
+    results = smart_comp.compare_batch("qualquer", [])
+    assert results == []

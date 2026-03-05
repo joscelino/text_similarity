@@ -22,8 +22,9 @@ class HybridSimilarity(SimilarityAlgorithm):
 
         Args:
             weights: Dicionário identificando o peso relativo de cada
-                algoritmo no resultado final.
-                Padrão: {"cosine": 0.4, "edit": 0.4, "phonetic": 0.2}.
+                algoritmo no resultado final. Padrão:
+                ``{"cosine": 0.35, "edit": 0.35,
+                "phonetic": 0.15, "entity": 0.15}``.
         """
         self.weights = weights or {
             "cosine": 0.35,

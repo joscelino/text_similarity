@@ -311,7 +311,8 @@ class Comparator:
         candidates: List[str],
         top_n: int = 50,
         min_cosine: float = 0.1,
-        strategy: Literal["vectorized"] = "vectorized",
+        strategy: Literal["vectorized", "parallel"] = "vectorized",
+        n_workers: int | None = None,
     ) -> List[dict[str, Any]]:
         """Compara um único texto contra uma lista de candidatos em lote.
 
@@ -325,9 +326,11 @@ class Comparator:
             candidates: Lista de textos candidatos.
             top_n: Número máximo de candidatos filtrados para a etapa final.
             min_cosine: Limiar mínimo de cosseno para descartar ruidosos.
-            strategy: Estratégia de comparação. Atualmente suporta apenas
-                ``"vectorized"`` (padrão), que delega internamente para
-                :meth:`compare_many_to_many`.
+            strategy: Estratégia de comparação.
+                ``"vectorized"`` (padrão) executa sequencialmente.
+                ``"parallel"`` distribui queries entre múltiplos processos.
+            n_workers: Número de processos para ``strategy="parallel"``.
+                Se None, usa ``os.cpu_count()``. Ignorado para ``vectorized``.
 
         Returns:
             Lista de dicionários, ordenados do maior score final para o menor,
@@ -336,10 +339,11 @@ class Comparator:
         Raises:
             ValueError: Se ``strategy`` não for um valor suportado.
         """
-        if strategy != "vectorized":
+        _valid_strategies = ("vectorized", "parallel")
+        if strategy not in _valid_strategies:
             raise ValueError(
                 f"Estratégia '{strategy}' não suportada. "
-                "Use 'vectorized'."
+                f"Use uma das: {_valid_strategies}."
             )
 
         results = self.compare_many_to_many(
@@ -347,6 +351,8 @@ class Comparator:
             candidates=candidates,
             top_n=top_n,
             min_cosine=min_cosine,
+            strategy=strategy,
+            n_workers=n_workers,
         )
         return results[0] if results else []
 
@@ -356,6 +362,8 @@ class Comparator:
         candidates: List[str],
         top_n: int = 50,
         min_cosine: float = 0.1,
+        strategy: Literal["vectorized", "parallel"] = "vectorized",
+        n_workers: int | None = None,
     ) -> List[List[dict[str, Any]]]:
         """Compara múltiplas queries contra uma lista de candidatos.
 
@@ -372,11 +380,19 @@ class Comparator:
         4. Filtragem por ``min_cosine`` e ``top_n``.
         5. Scoring híbrido (entity, edit, phonetic) nos top-N.
 
+        Quando ``strategy="parallel"``, as etapas 3-5 são distribuídas
+        entre múltiplos processos via ``ProcessPoolExecutor``.
+
         Args:
             queries: Lista de textos de busca.
             candidates: Lista de textos candidatos.
             top_n: Número máximo de candidatos por query na etapa final.
             min_cosine: Limiar mínimo de cosseno para descartar ruidosos.
+            strategy: Estratégia de execução.
+                ``"vectorized"`` (padrão) executa sequencialmente.
+                ``"parallel"`` distribui queries entre múltiplos processos.
+            n_workers: Número de processos para ``strategy="parallel"``.
+                Se None, usa ``os.cpu_count()``. Ignorado para ``vectorized``.
 
         Returns:
             Lista de listas de dicionários — uma lista de resultados para
@@ -390,9 +406,6 @@ class Comparator:
             return [[] for _ in queries]
 
         from sklearn.feature_extraction.text import TfidfVectorizer
-        from sklearn.metrics.pairwise import (
-            cosine_similarity as sklearn_cosine_similarity,
-        )
 
         # 1. Pré-processamento em lote dos candidatos (reutiliza cache)
         p_candidates = self._process_batch(candidates)
@@ -405,7 +418,34 @@ class Comparator:
             # Vocabulário vazio — retorna listas vazias para todas as queries
             return [[] for _ in queries]
 
-        # 3. Para cada query: transform + cosine + scoring
+        # 3. Estratégia de execução
+        if strategy == "parallel":
+            from text_similarity.pipeline.parallel import run_parallel_queries
+
+            # Extrair pesos do algoritmo para serialização
+            alg_weights: dict[str, float] = {}
+            if hasattr(self.algorithm, "weights"):
+                alg_weights = self.algorithm.weights  # type: ignore[union-attr]
+
+            return run_parallel_queries(
+                queries=queries,
+                candidates=list(candidates),
+                p_candidates=p_candidates,
+                cand_matrix=cand_matrix,
+                vectorizer=vectorizer,
+                mode=self.mode,
+                entities=self.entities,
+                algorithm_weights=alg_weights,
+                top_n=top_n,
+                min_cosine=min_cosine,
+                n_workers=n_workers,
+            )
+
+        # Estratégia sequencial (vectorized)
+        from sklearn.metrics.pairwise import (
+            cosine_similarity as sklearn_cosine_similarity,
+        )
+
         all_results: List[List[dict[str, Any]]] = []
 
         for query in queries:

@@ -161,6 +161,28 @@ for query, resultados in zip(buscas, todos_resultados):
 > - `compare_batch()` → 1 query × N candidatos (ex: busca textual de um usuário).
 > - `compare_many_to_many()` → M queries × N candidatos (ex: deduplicação em lote, cruzamento de bases).
 
+### Execução Paralela (`strategy="parallel"`)
+Para cenários de **alto volume** (50+ queries × 10k+ candidatos), ative a estratégia paralela que distribui as queries entre múltiplos processos via `ProcessPoolExecutor`:
+
+```python
+from text_similarity.api import Comparator
+comp = Comparator.smart()
+
+# Distribui entre 4 processos (padrão: os.cpu_count())
+resultados = comp.compare_many_to_many(
+    buscas, candidatos, top_n=5, min_cosine=0.1,
+    strategy="parallel", n_workers=4,
+)
+
+# Funciona também com compare_batch
+resultado = comp.compare_batch(
+    "busca única", candidatos, top_n=10,
+    strategy="parallel", n_workers=4,
+)
+```
+
+> **⚠️ Quando NÃO usar `parallel`:** Para poucos queries (< 20) ou poucos candidatos (< 5k), o overhead de criação de processos pode superar o ganho. Use `strategy="vectorized"` (padrão) nesses casos.
+
 
 ### Entendendo "Por que" deram Match (Explain)
 Às vezes você precisa debugar a intenção do usuário ou mostrar evidências de que o cruzamento de algoritmos detectou semelhança. Use o `.explain()`:

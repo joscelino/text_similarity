@@ -183,6 +183,33 @@ resultado = comp.compare_batch(
 
 > **⚠️ Quando NÃO usar `parallel`:** Para poucos queries (< 20) ou poucos candidatos (< 5k), o overhead de criação de processos pode superar o ganho. Use `strategy="vectorized"` (padrão) nesses casos.
 
+### Integração Async (FastAPI, aiohttp)
+Para **web servers assíncronos**, use os métodos `_async` que offloadam o trabalho CPU-bound para um `ProcessPoolExecutor`, mantendo o event loop livre:
+
+```python
+from fastapi import FastAPI
+from text_similarity import Comparator
+
+app = FastAPI()
+comp = Comparator.smart()
+
+@app.post("/search")
+async def search(query: str, candidates: list[str]):
+    results = await comp.compare_batch_async(
+        query, candidates, top_n=10, n_workers=4
+    )
+    return {"results": results}
+
+@app.post("/bulk-search")
+async def bulk_search(queries: list[str], candidates: list[str]):
+    results = await comp.compare_many_to_many_async(
+        queries, candidates, top_n=5, n_workers=4
+    )
+    return {"results": results}
+```
+
+> **Métodos async disponíveis:** `compare_batch_async()` e `compare_many_to_many_async()`. Ambos usam `strategy="parallel"` internamente.
+
 
 ### Entendendo "Por que" deram Match (Explain)
 Às vezes você precisa debugar a intenção do usuário ou mostrar evidências de que o cruzamento de algoritmos detectou semelhança. Use o `.explain()`:

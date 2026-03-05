@@ -7,7 +7,7 @@ packages = ["src/text_similarity"]
 
 [project]
 name = "text-similarity-br"
-version = "0.2.0-dev.2"
+version = "0.2.0-dev.3"
 description = "Biblioteca Python para comparação de similaridade de textos em Português Brasileiro, com suporte a entidades numéricas, fonética PT-BR e pipeline de pré-processamento modular."
 readme = "README.md"
 requires-python = ">=3.8"
@@ -58,6 +58,7 @@ nlp = [
 dev = [
     "mypy>=1.14.1",
     "pytest>=8.3.5",
+    "pytest-asyncio>=0.23.0",
     "pytest-cov>=5.0.0",
     "ruff>=0.15.4",
 ]
@@ -65,6 +66,8 @@ dev = [
 [tool.pytest.ini_options]
 minversion = "6.0"
 addopts = "-ra -q"
+asyncio_mode = "auto"
+asyncio_default_fixture_loop_scope = "function"
 testpaths = [
     "tests",
 ]

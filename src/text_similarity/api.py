@@ -118,10 +118,12 @@ class Comparator:
             key = self.cache.hash_text(text)
             if key in self._cache_store:
                 return self._cache_store[key]
+        else:
+            key = None
 
         processed, _ = self.pipeline.process(text)
 
-        if self.cache is not None:
+        if self.cache is not None and key is not None:
             self._cache_store[key] = processed
 
         return processed
@@ -470,3 +472,88 @@ class Comparator:
             all_results.append(results)
 
         return all_results
+
+    async def compare_batch_async(
+        self,
+        text: str,
+        candidates: List[str],
+        top_n: int = 50,
+        min_cosine: float = 0.1,
+        n_workers: int | None = None,
+    ) -> List[dict[str, Any]]:
+        """Versão assíncrona de :meth:`compare_batch`.
+
+        Offloads o trabalho CPU-bound para um ``ProcessPoolExecutor``
+        via ``loop.run_in_executor()``, mantendo o event loop livre
+        para atender outras requisições concorrentes.
+
+        Ideal para integração com frameworks async como FastAPI,
+        aiohttp e Starlette.
+
+        Args:
+            text: Texto principal para buscar.
+            candidates: Lista de textos candidatos.
+            top_n: Número máximo de candidatos filtrados para a etapa final.
+            min_cosine: Limiar mínimo de cosseno para descartar ruidosos.
+            n_workers: Número de processos. Se None, usa ``os.cpu_count()``.
+
+        Returns:
+            Lista de dicionários, ordenados do maior score final para o menor.
+        """
+        import asyncio
+        import functools
+
+        loop = asyncio.get_running_loop()
+        return await loop.run_in_executor(
+            None,
+            functools.partial(
+                self.compare_batch,
+                text,
+                candidates,
+                top_n=top_n,
+                min_cosine=min_cosine,
+                strategy="parallel",
+                n_workers=n_workers,
+            ),
+        )
+
+    async def compare_many_to_many_async(
+        self,
+        queries: List[str],
+        candidates: List[str],
+        top_n: int = 50,
+        min_cosine: float = 0.1,
+        n_workers: int | None = None,
+    ) -> List[List[dict[str, Any]]]:
+        """Versão assíncrona de :meth:`compare_many_to_many`.
+
+        Offloads o trabalho CPU-bound para um ``ProcessPoolExecutor``
+        via ``loop.run_in_executor()``, mantendo o event loop livre.
+
+        Args:
+            queries: Lista de textos de busca.
+            candidates: Lista de textos candidatos.
+            top_n: Número máximo de candidatos por query na etapa final.
+            min_cosine: Limiar mínimo de cosseno para descartar ruidosos.
+            n_workers: Número de processos. Se None, usa ``os.cpu_count()``.
+
+        Returns:
+            Lista de listas de dicionários — uma lista de resultados para
+            cada query, ordenados do maior score final para o menor.
+        """
+        import asyncio
+        import functools
+
+        loop = asyncio.get_running_loop()
+        return await loop.run_in_executor(
+            None,
+            functools.partial(
+                self.compare_many_to_many,
+                queries,
+                candidates,
+                top_n=top_n,
+                min_cosine=min_cosine,
+                strategy="parallel",
+                n_workers=n_workers,
+            ),
+        )

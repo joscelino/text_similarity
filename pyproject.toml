@@ -53,6 +53,10 @@ Repository = "https://github.com/joscelino/text_similarity"
 nlp = [
     "spacy>=3.7.0",
 ]
+semantic = [
+    "sentence-transformers>=2.0.0",
+    "torch>=1.13.0,<2.5.0",
+]
 
 [dependency-groups]
 dev = [

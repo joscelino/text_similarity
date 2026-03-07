@@ -46,6 +46,12 @@ pip install "text-similarity-br[nlp]"
 python -m spacy download pt_core_news_sm
 ```
 
+Com suporte a **Similaridade Semântica (Word Embeddings / Redes Neurais)**:
+
+```bash
+pip install "text-similarity-br[semantic]"
+```
+
 ---
 
 ## 📖 Como Usar
@@ -103,6 +109,20 @@ comp_lab = Comparator.smart(entities=["date", "dimension"])
 ```
 
 > **Dica:** Filtrar entidades melhora a precisão evitando falsos positivos. Um extrator de `date` ativo num catálogo de produtos pode mapear incorretamente SKUs contendo dígitos de ano.
+
+### Modo Semântico (Word Embeddings)
+Para capturar a real intenção semântica entre sinônimos que não compartilham nenhuma letra (ex: `"veículo"` vs `"carro"`), você pode ativar o motor de **Sentence-Transformers**.
+
+```python
+from text_similarity.api import Comparator
+
+# Habilita o uso de modelos densos por debaixo dos panos
+comp = Comparator.smart(use_embeddings=True)
+
+score = comp.compare("automóvel bicombustível", "carro flex")
+print(f"Similaridade Semântica: {score:.2f}") # Alto score, diferentemente do TF-IDF puro.
+```
+*Atenção: A primeira chamada em cada processo isolado pode demorar alguns milisegundos a mais para carregar o modelo PyTorch na RAM. Nos métodos de Lote (`compare_batch` / `strategy="parallel"`), a Similaridade Semântica age como uma avaliação final super otimizada apenas nos `top_n` retornados pelo TF-IDF.*
 
 ### Processamento em Lote (Batch)
 Para casos de uso onde é necessário comparar uma *query* contra centenas ou milhares de candidatos, utilize o método `compare_batch`. Ele é altamente otimizado aplicando matrizes esparsas via Scikit-Learn e descartes (short-circuit) matemáticos. Entregando resultados consolidados até **~48x mais rápido** dependendo do volume.

@@ -26,7 +26,11 @@ class TestCompareBatchAsync:
         ]
 
         results = await smart_comp.compare_batch_async(
-            query, candidates, top_n=3, min_cosine=0.0, n_workers=1,
+            query,
+            candidates,
+            top_n=3,
+            min_cosine=0.0,
+            n_workers=1,
         )
 
         assert len(results) > 0
@@ -41,11 +45,18 @@ class TestCompareBatchAsync:
         ]
 
         sync_results = smart_comp.compare_batch(
-            query, candidates, top_n=5, min_cosine=0.0,
+            query,
+            candidates,
+            top_n=5,
+            min_cosine=0.0,
             strategy="vectorized",
         )
         async_results = await smart_comp.compare_batch_async(
-            query, candidates, top_n=5, min_cosine=0.0, n_workers=1,
+            query,
+            candidates,
+            top_n=5,
+            min_cosine=0.0,
+            n_workers=1,
         )
 
         assert len(sync_results) == len(async_results)
@@ -55,7 +66,9 @@ class TestCompareBatchAsync:
 
     async def test_empty_candidates(self, smart_comp):
         results = await smart_comp.compare_batch_async(
-            "qualquer", [], n_workers=1,
+            "qualquer",
+            [],
+            n_workers=1,
         )
         assert results == []
 
@@ -73,7 +86,11 @@ class TestCompareManyToManyAsync:
         ]
 
         results = await smart_comp.compare_many_to_many_async(
-            queries, candidates, top_n=5, min_cosine=0.0, n_workers=1,
+            queries,
+            candidates,
+            top_n=5,
+            min_cosine=0.0,
+            n_workers=1,
         )
 
         assert len(results) == 2
@@ -88,11 +105,18 @@ class TestCompareManyToManyAsync:
         ]
 
         sync_results = basic_comp.compare_many_to_many(
-            queries, candidates, top_n=5, min_cosine=0.0,
+            queries,
+            candidates,
+            top_n=5,
+            min_cosine=0.0,
             strategy="vectorized",
         )
         async_results = await basic_comp.compare_many_to_many_async(
-            queries, candidates, top_n=5, min_cosine=0.0, n_workers=1,
+            queries,
+            candidates,
+            top_n=5,
+            min_cosine=0.0,
+            n_workers=1,
         )
 
         assert len(sync_results) == len(async_results)
@@ -104,13 +128,17 @@ class TestCompareManyToManyAsync:
 
     async def test_empty_queries(self, smart_comp):
         results = await smart_comp.compare_many_to_many_async(
-            queries=[], candidates=["qualquer"], n_workers=1,
+            queries=[],
+            candidates=["qualquer"],
+            n_workers=1,
         )
         assert results == []
 
     async def test_empty_candidates(self, smart_comp):
         results = await smart_comp.compare_many_to_many_async(
-            queries=["q1", "q2"], candidates=[], n_workers=1,
+            queries=["q1", "q2"],
+            candidates=[],
+            n_workers=1,
         )
         assert len(results) == 2
         assert results[0] == []
@@ -124,7 +152,11 @@ class TestCompareManyToManyAsync:
         ]
 
         results = await smart_comp.compare_many_to_many_async(
-            queries, candidates, top_n=5, min_cosine=0.0, n_workers=1,
+            queries,
+            candidates,
+            top_n=5,
+            min_cosine=0.0,
+            n_workers=1,
         )
 
         top_hit = results[0][0]

@@ -31,12 +31,19 @@ class TestParallelMatchesVectorized:
         ]
 
         vec_results = smart_comp.compare_many_to_many(
-            queries, candidates, top_n=5, min_cosine=0.0,
+            queries,
+            candidates,
+            top_n=5,
+            min_cosine=0.0,
             strategy="vectorized",
         )
         par_results = smart_comp.compare_many_to_many(
-            queries, candidates, top_n=5, min_cosine=0.0,
-            strategy="parallel", n_workers=2,
+            queries,
+            candidates,
+            top_n=5,
+            min_cosine=0.0,
+            strategy="parallel",
+            n_workers=2,
         )
 
         assert len(vec_results) == len(par_results)
@@ -55,12 +62,19 @@ class TestParallelMatchesVectorized:
         ]
 
         vec_results = basic_comp.compare_many_to_many(
-            queries, candidates, top_n=5, min_cosine=0.0,
+            queries,
+            candidates,
+            top_n=5,
+            min_cosine=0.0,
             strategy="vectorized",
         )
         par_results = basic_comp.compare_many_to_many(
-            queries, candidates, top_n=5, min_cosine=0.0,
-            strategy="parallel", n_workers=2,
+            queries,
+            candidates,
+            top_n=5,
+            min_cosine=0.0,
+            strategy="parallel",
+            n_workers=2,
         )
 
         assert len(vec_results) == len(par_results)
@@ -83,8 +97,12 @@ class TestParallelCompareBatch:
         ]
 
         results = smart_comp.compare_batch(
-            query, candidates, top_n=3, min_cosine=0.0,
-            strategy="parallel", n_workers=2,
+            query,
+            candidates,
+            top_n=3,
+            min_cosine=0.0,
+            strategy="parallel",
+            n_workers=2,
         )
 
         assert len(results) > 0
@@ -99,12 +117,19 @@ class TestParallelCompareBatch:
         ]
 
         vec_results = smart_comp.compare_batch(
-            query, candidates, top_n=5, min_cosine=0.0,
+            query,
+            candidates,
+            top_n=5,
+            min_cosine=0.0,
             strategy="vectorized",
         )
         par_results = smart_comp.compare_batch(
-            query, candidates, top_n=5, min_cosine=0.0,
-            strategy="parallel", n_workers=2,
+            query,
+            candidates,
+            top_n=5,
+            min_cosine=0.0,
+            strategy="parallel",
+            n_workers=2,
         )
 
         assert len(vec_results) == len(par_results)
@@ -118,15 +143,19 @@ class TestParallelEdgeCases:
 
     def test_empty_queries(self, smart_comp):
         results = smart_comp.compare_many_to_many(
-            queries=[], candidates=["qualquer"],
-            strategy="parallel", n_workers=2,
+            queries=[],
+            candidates=["qualquer"],
+            strategy="parallel",
+            n_workers=2,
         )
         assert results == []
 
     def test_empty_candidates(self, smart_comp):
         results = smart_comp.compare_many_to_many(
-            queries=["query1", "query2"], candidates=[],
-            strategy="parallel", n_workers=2,
+            queries=["query1", "query2"],
+            candidates=[],
+            strategy="parallel",
+            n_workers=2,
         )
         assert len(results) == 2
         assert results[0] == []
@@ -138,8 +167,12 @@ class TestParallelEdgeCases:
         candidates = ["celular iphone 13", "samsung s22"]
 
         results = smart_comp.compare_many_to_many(
-            queries, candidates, top_n=5, min_cosine=0.0,
-            strategy="parallel", n_workers=1,
+            queries,
+            candidates,
+            top_n=5,
+            min_cosine=0.0,
+            strategy="parallel",
+            n_workers=1,
         )
 
         assert len(results) == 1
@@ -149,7 +182,8 @@ class TestParallelEdgeCases:
         results = smart_comp.compare_many_to_many(
             queries=["teste"],
             candidates=["teste único"],
-            strategy="parallel", n_workers=2,
+            strategy="parallel",
+            n_workers=2,
         )
         assert len(results) == 1
 
@@ -166,8 +200,12 @@ class TestParallelShortCircuit:
         ]
 
         results = smart_comp.compare_many_to_many(
-            queries, candidates, top_n=5, min_cosine=0.0,
-            strategy="parallel", n_workers=2,
+            queries,
+            candidates,
+            top_n=5,
+            min_cosine=0.0,
+            strategy="parallel",
+            n_workers=2,
         )
 
         top_hit = results[0][0]

@@ -86,9 +86,9 @@ def test_pipeline_raises_stage_exception() -> None:
     type(bad_stage).__name__ = "BadStage"
 
     pipeline = PreprocessingPipeline([bad_stage, CleanTextStage()])
-    
+
     with pytest.raises(StageProcessingError, match="BadStage"):
-         pipeline.process("Texto texto")
+        pipeline.process("Texto texto")
 
 
 def test_pipeline_type_error_fail_fast() -> None:
@@ -107,17 +107,17 @@ def test_pipeline_unicode_error_fail_fast_mocked() -> None:
     from unittest.mock import MagicMock
 
     bad_stage = MagicMock()
-    
+
     # simulamos como se um stage atirasse um unicode error ao processar byte array ou problema enconding
     error_instance = UnicodeDecodeError("utf-8", b"\\x81", 0, 1, "invalid start byte")
     bad_stage.process.side_effect = error_instance
     type(bad_stage).__name__ = "UnicodeStageTest"
 
     pipeline = PreprocessingPipeline([bad_stage])
-    
+
     with pytest.raises(StageProcessingError) as exc_info:
         pipeline.process("Texto com caracteres ruins")
-        
+
     assert "UnicodeStageTest" in str(exc_info.value)
     assert exc_info.value.original_error is error_instance
 
@@ -132,10 +132,10 @@ def test_pipeline_stage_processing_error_attributes() -> None:
     type(bad_stage).__name__ = "MockNLPStage"
 
     pipeline = PreprocessingPipeline([bad_stage])
-    
+
     with pytest.raises(StageProcessingError) as exc_info:
         pipeline.process("Process")
-        
+
     assert exc_info.value.stage_name == "MockNLPStage"
     assert exc_info.value.original_error is original_err
     assert "MockNLPStage" in str(exc_info.value)

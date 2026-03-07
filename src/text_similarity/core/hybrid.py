@@ -31,6 +31,7 @@ class HybridSimilarity(SimilarityAlgorithm):
             "edit": 0.35,
             "phonetic": 0.15,
             "entity": 0.15,
+            "semantic": 0.0,
         }
 
         # Normalizando pesos para somarem 1.0
@@ -39,13 +40,19 @@ class HybridSimilarity(SimilarityAlgorithm):
             total_weight = 1.0
         self.weights = {k: v / total_weight for k, v in self.weights.items()}
 
-        # Instanciando algoritmos
-        self.algorithms = {
+        # Instanciando algoritmos base
+        self.algorithms: dict[str, SimilarityAlgorithm] = {
             "cosine": CosineSimilarity(),
             "edit": EditDistanceSimilarity(method="ratio"),
             "phonetic": PhoneticSimilarity(),
             "entity": EntityIntersectionSimilarity(),
         }
+
+        # Instanciar SemanticSimilarity APENAS se ativado para evitar overhead
+        if self.weights.get("semantic", 0.0) > 0.0:
+            from text_similarity.core.semantic import SemanticSimilarity
+
+            self.algorithms["semantic"] = SemanticSimilarity()
 
     def compare(self, text1: str, text2: str) -> float:
         """Soma iterativamente as ponderações de cada algoritmo.

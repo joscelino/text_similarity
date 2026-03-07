@@ -72,13 +72,22 @@ class Comparator:
         # Configuração do Algoritmo
         if self.mode == "smart":
             # Dá peso maior para a fonética e entidades exatas (tokens)
-            self.algorithm: SimilarityAlgorithm = HybridSimilarity(
-                weights={"cosine": 0.45, "edit": 0.25, "phonetic": 0.20, "entity": 0.10}
-            )
+            weights = {"cosine": 0.45, "edit": 0.25, "phonetic": 0.20, "entity": 0.10}
+            if kwargs.get("use_embeddings", False):
+                # Se semântica for pedida no Smart, recalibramos
+                weights = {
+                    "cosine": 0.30,
+                    "edit": 0.15,
+                    "phonetic": 0.15,
+                    "entity": 0.10,
+                    "semantic": 0.30,
+                }
+            self.algorithm: SimilarityAlgorithm = HybridSimilarity(weights=weights)
         else:
-            self.algorithm = HybridSimilarity(
-                weights={"cosine": 0.5, "edit": 0.5, "phonetic": 0.0}
-            )
+            weights = {"cosine": 0.5, "edit": 0.5, "phonetic": 0.0}
+            if kwargs.get("use_embeddings", False):
+                weights = {"cosine": 0.3, "edit": 0.3, "phonetic": 0.0, "semantic": 0.4}
+            self.algorithm = HybridSimilarity(weights=weights)
 
     @classmethod
     def basic(cls) -> "Comparator":
@@ -93,13 +102,20 @@ class Comparator:
         cls,
         entities: list[str] | None = None,
         use_cache: bool = True,
+        use_embeddings: bool = False,
     ) -> "Comparator":
         """Instancia um Comparator no modo inteligente.
 
         Ativa a extração de entidades, unifica tokens, analisa a fonética PT-BR
         e cruza resultados de múltiplos algoritmos.
+        Se `use_embeddings=True`, ativa Similaridade Semântica baseada em vetores densos.
         """
-        return cls(mode="smart", entities=entities, use_cache=use_cache)
+        return cls(
+            mode="smart",
+            entities=entities,
+            use_cache=use_cache,
+            use_embeddings=use_embeddings,
+        )
 
     def _process(self, text: str) -> str:
         """Pré-processa o texto pelo pipeline, com cache in-memory.
@@ -204,7 +220,7 @@ class Comparator:
                             details["entity"]["score"] * alg_weights["entity"]
                         )
 
-                    for name in ["edit", "phonetic"]:
+                    for name in ["edit", "phonetic", "semantic"]:
                         if name in alg_weights and alg_weights[name] > 0:
                             score = algs[name].compare(p_text, c_p_text)
                             details[name] = {
@@ -293,9 +309,7 @@ class Comparator:
             ordenados por cosseno descendente e limitados a top_n.
         """
         scored: List[dict[str, Any]] = []
-        for c_text, c_p_text, cos_score in zip(
-            candidates, p_candidates, cosine_scores
-        ):
+        for c_text, c_p_text, cos_score in zip(candidates, p_candidates, cosine_scores):
             if cos_score >= min_cosine:
                 scored.append(
                     {
@@ -455,9 +469,7 @@ class Comparator:
 
             try:
                 query_vec = vectorizer.transform([p_query])
-                cosine_scores = sklearn_cosine_similarity(
-                    query_vec, cand_matrix
-                )[0]
+                cosine_scores = sklearn_cosine_similarity(query_vec, cand_matrix)[0]
             except ValueError:
                 all_results.append([])
                 continue

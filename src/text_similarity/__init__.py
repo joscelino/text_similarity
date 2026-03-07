@@ -4,7 +4,12 @@ Biblioteca Python para comparação de similaridade de textos otimizada para PT-
 """
 
 from .api import Comparator
-from .exceptions import PipelineError, StageConfigError, StageProcessingError, TextSimilarityError
+from .exceptions import (
+    PipelineError,
+    StageConfigError,
+    StageProcessingError,
+    TextSimilarityError,
+)
 
 __version__ = "0.2.0"
 __all__ = [

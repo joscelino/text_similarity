@@ -24,9 +24,7 @@ class TestCompareManyToManyBasic:
             "carregador universal",
         ]
 
-        results = smart_comp.compare_many_to_many(
-            queries, candidates, min_cosine=0.0
-        )
+        results = smart_comp.compare_many_to_many(queries, candidates, min_cosine=0.0)
 
         assert isinstance(results, list)
         assert len(results) == 2
@@ -37,9 +35,7 @@ class TestCompareManyToManyBasic:
         queries = ["mesa de madeira"]
         candidates = ["mesa de madeira rustica", "cadeira de ferro"]
 
-        results = smart_comp.compare_many_to_many(
-            queries, candidates, min_cosine=0.0
-        )
+        results = smart_comp.compare_many_to_many(queries, candidates, min_cosine=0.0)
 
         for item in results[0]:
             assert "candidate" in item
@@ -55,9 +51,7 @@ class TestCompareManyToManyBasic:
             "macarrão",
         ]
 
-        results = smart_comp.compare_many_to_many(
-            queries, candidates, min_cosine=0.0
-        )
+        results = smart_comp.compare_many_to_many(queries, candidates, min_cosine=0.0)
 
         scores = [r["score"] for r in results[0]]
         assert scores == sorted(scores, reverse=True)
@@ -67,9 +61,7 @@ class TestCompareManyToManyEdgeCases:
     """Testes de borda e casos vazios."""
 
     def test_empty_queries_returns_empty(self, smart_comp):
-        results = smart_comp.compare_many_to_many(
-            queries=[], candidates=["qualquer"]
-        )
+        results = smart_comp.compare_many_to_many(queries=[], candidates=["qualquer"])
         assert results == []
 
     def test_empty_candidates_returns_empty_lists(self, smart_comp):
@@ -101,9 +93,7 @@ class TestCompareManyToManyMinCosineFilter:
             "livro de receitas",
         ]
 
-        results = smart_comp.compare_many_to_many(
-            queries, candidates, min_cosine=0.2
-        )
+        results = smart_comp.compare_many_to_many(queries, candidates, min_cosine=0.2)
 
         for r in results[0]:
             assert "mesa" in r["candidate"] or "madeira" in r["candidate"]

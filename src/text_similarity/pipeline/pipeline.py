@@ -5,8 +5,9 @@ from __future__ import annotations
 import logging
 from typing import List
 
-from .stage import PipelineContext, PipelineStage
 from text_similarity.exceptions import StageProcessingError
+
+from .stage import PipelineContext, PipelineStage
 
 logger = logging.getLogger(__name__)
 

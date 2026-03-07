@@ -11,8 +11,9 @@ from text_similarity.exceptions import StageProcessingError
 logger = logging.getLogger(__name__)
 
 # Cache Global Lazy Initialization
-# Esse padrão garante que workers não tentem serializar o modelo de dezenas/centenas de MB
-# durante a paralelização (multiprocessing) e instanciem localmente o peso ao inicializar.
+# Esse padrão garante que workers não tentem serializar o modelo de dezenas/centenas
+# de MB durante a paralelização (multiprocessing) e instanciem localmente o peso ao
+# inicializar.
 _GLOBAL_MODEL: Any = None
 _CURRENT_MODEL_NAME: str | None = None
 
@@ -37,8 +38,9 @@ class SemanticSimilarity(SimilarityAlgorithm):
         Args:
             model_name: O nome/path no HuggingFace. Por default, utiliza
                 um modelo leve multilinguístico (inclui Português).
-            device: Dispositivo ('cpu', 'cuda', etc). Se None, o pytorch/sentence_transformers
-                detecta e usa o melhor hardware disponível localmente.
+            device: Dispositivo ('cpu', 'cuda', etc). Se None, o
+                pytorch/sentence_transformers detecta e usa o melhor hardware
+                disponível localmente.
         """
         self.model_name = model_name
         self.device = device
@@ -93,12 +95,14 @@ class SemanticSimilarity(SimilarityAlgorithm):
         try:
             from sentence_transformers import util
 
-            # encode() processa a frase e devolve o tensor Numpy (PyTorch cpu/cuda Tensor)
-            # convert_to_tensor=True garante que util.cos_sim opere em PyTorch nativo
+            # encode() processa a frase e devolve o tensor Numpy
+            # (PyTorch cpu/cuda Tensor).
+            # convert_to_tensor=True garante que util.cos_sim opere em PyTorch nativo.
             emb1 = model.encode(text1, convert_to_tensor=True)
             emb2 = model.encode(text2, convert_to_tensor=True)
 
-            # Cosine_Similarity pode retornar tensores bidimensionais de 1x1 nestes casos
+            # Cosine_Similarity pode retornar tensores bidimensionais de 1x1 nestes
+            # casos.
             cosine_scores = util.cos_sim(emb1, emb2)
             score = float(cosine_scores[0][0])  # pyright: ignore
 

@@ -31,32 +31,34 @@ def test_calibrator_immutability():
 def test_calibrator_empty_string_handling():
     """Garante que cenários defeituosos não interrompem um teste em lote."""
     comp = Comparator.basic()
-    
+
     gs = [
         {"query": "teste limpo", "target": "teste limpo", "match": True},
         {"query": "", "target": "algum lixo", "match": False},
         {"query": "  ", "target": "", "match": False},
     ]
-    
+
     configs = [{"cosine": 1.0}]
     tuner = WeightCalibrator(comp, configs)
-    
+
     # Não deve "cachar" exceptions nem travar
     report = tuner.evaluate(gs)
-    
-    # Ele acertou perfeitamente: o primeiro é match (1.0) e os vazios dão score 0.0 (!match).
+
+    # Ele acertou perfeitamente: o primeiro é match (1.0)
+    # e os vazios dão score 0.0 (!match).
     assert report.best_metrics["f1_score"] > 0.99
 
 
 def test_calibrator_correct_f1_score():
     """Validação matemática simplificada para precisão e recall na melhor config."""
     comp = Comparator.smart()
-    
+
     # Base: 2 matches reais, 1 falso verdadeiro
-    # Levenshtein pega erros pequenos ("casa" vs "caza"). Cosseno é burro para isso ("casa" vs "caza" -> 0.0)
+    # Levenshtein pega erros pequenos ("casa" vs "caza").
+    # Cosseno é burro para isso ("casa" vs "caza" -> 0.0)
     gs = [
-        {"query": "casa", "target": "caza", "match": True}, # Esperamos que cfg1 pontue alto (match) e cfg2 zero
-        {"query": "celular", "target": "cel", "match": False}, # Todos perdem ou pontuam baixo
+        {"query": "casa", "target": "caza", "match": True}, # Esperamos que cfg1 (match)
+        {"query": "celular", "target": "cel", "match": False}, # Todos perdem
         {"query": "teste", "target": "teste", "match": True}, # Todos ganham
     ]
 
@@ -72,7 +74,8 @@ def test_calibrator_correct_f1_score():
     assert report.best_weights == {"edit": 1.0}
     assert report.best_metrics["f1_score"] == 1.0  # Perfect Score com EDIT
 
-    # Testando o Discrepancy (O pior cenário, cfg de Cosseno, deve ter gerado 1 FN "casa" vs "caza")
+    # Testando o Discrepancy (O pior cenário, cfg de Cosseno, deve ter
+    # gerado 1 FN "casa" vs "caza")
     # Para o Cosseno: TP=1 ("teste"), FN=1 ("casa"/"caza"), FP=0
     cosine_res = [r for r in report.all_results if r["weights"] == {"cosine": 1.0}][0]
     assert cosine_res["metrics"]["f1_score"] < 1.0

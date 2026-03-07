@@ -1,10 +1,10 @@
 from __future__ import annotations
 
 import tempfile
+
 import pytest
 
 from text_similarity.exceptions import StageProcessingError
-
 from text_similarity.pipeline.backends import (
     CleanTextStage,
     LemmatizeStage,
@@ -108,7 +108,8 @@ def test_pipeline_unicode_error_fail_fast_mocked() -> None:
 
     bad_stage = MagicMock()
 
-    # simulamos como se um stage atirasse um unicode error ao processar byte array ou problema enconding
+    # simulamos como se um stage atirasse um unicode error ao processar byte array
+    # ou problema enconding
     error_instance = UnicodeDecodeError("utf-8", b"\\x81", 0, 1, "invalid start byte")
     bad_stage.process.side_effect = error_instance
     type(bad_stage).__name__ = "UnicodeStageTest"

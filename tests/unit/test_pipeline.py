@@ -1,6 +1,9 @@
 from __future__ import annotations
 
 import tempfile
+import pytest
+
+from text_similarity.exceptions import StageProcessingError
 
 from text_similarity.pipeline.backends import (
     CleanTextStage,
@@ -73,17 +76,67 @@ def test_add_stage_appends_to_pipeline() -> None:
     assert len(pipeline.stages) == 2
 
 
-def test_pipeline_catches_stage_exception() -> None:
-    """Pipeline deve capturar exceção de estágio e continuar processando."""
+def test_pipeline_raises_stage_exception() -> None:
+    """Pipeline deve abortar e propagar o erro encapsulado como StageProcessingError."""
     from unittest.mock import MagicMock
 
-    from text_similarity.pipeline.stage import PipelineContext
-
     bad_stage = MagicMock()
-    bad_stage.process.side_effect = RuntimeError("Estágio quebrado")
+    bad_stage.process.side_effect = ValueError("Input inválido")
+    # Para o erro ficar legível no report e capturável no pytest matches
+    type(bad_stage).__name__ = "BadStage"
 
     pipeline = PreprocessingPipeline([bad_stage, CleanTextStage()])
-    # Não deve levantar exceção — apenas logar o erro e continuar
-    result, ctx = pipeline.process("Texto qualquer para processar")
-    assert isinstance(result, str)
-    assert isinstance(ctx, PipelineContext)
+
+    with pytest.raises(StageProcessingError, match="BadStage"):
+        pipeline.process("Texto texto")
+
+
+def test_pipeline_type_error_fail_fast() -> None:
+    """Um erro de tipo puro na entra deve disparar StageProcessingError."""
+    # Instanciar a primeira normalizadora para garantir falha por tipo
+    pipeline = PreprocessingPipeline([CleanTextStage()])
+    with pytest.raises(StageProcessingError) as exc_info:
+        pipeline.process(None)  # type: ignore
+
+    assert "CleanTextStage" in str(exc_info.value)
+    assert isinstance(exc_info.value.original_error, TypeError)
+
+
+def test_pipeline_unicode_error_fail_fast_mocked() -> None:
+    """Um erro de decodificação Unicode deve disparar StageProcessingError."""
+    from unittest.mock import MagicMock
+
+    bad_stage = MagicMock()
+
+    # simulamos como se um stage atirasse um unicode error ao processar byte array ou problema enconding
+    error_instance = UnicodeDecodeError("utf-8", b"\\x81", 0, 1, "invalid start byte")
+    bad_stage.process.side_effect = error_instance
+    type(bad_stage).__name__ = "UnicodeStageTest"
+
+    pipeline = PreprocessingPipeline([bad_stage])
+
+    with pytest.raises(StageProcessingError) as exc_info:
+        pipeline.process("Texto com caracteres ruins")
+
+    assert "UnicodeStageTest" in str(exc_info.value)
+    assert exc_info.value.original_error is error_instance
+
+
+def test_pipeline_stage_processing_error_attributes() -> None:
+    """Garantir que a exceção preserva os atributos da falha original."""
+    from unittest.mock import MagicMock
+
+    bad_stage = MagicMock()
+    original_err = RuntimeError("Motor NLP off-line")
+    bad_stage.process.side_effect = original_err
+    type(bad_stage).__name__ = "MockNLPStage"
+
+    pipeline = PreprocessingPipeline([bad_stage])
+
+    with pytest.raises(StageProcessingError) as exc_info:
+        pipeline.process("Process")
+
+    assert exc_info.value.stage_name == "MockNLPStage"
+    assert exc_info.value.original_error is original_err
+    assert "MockNLPStage" in str(exc_info.value)
+    assert "RuntimeError" in str(exc_info.value)

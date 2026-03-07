@@ -84,7 +84,7 @@ def test_stopwords_custom_words_are_filtered() -> None:
     tokens = ["produto", "especial", "geladeira", "de"]
     filtered = filter_sw.filter(tokens)
 
-    assert "produto" not in filtered   # Removido como custom stopword
+    assert "produto" not in filtered  # Removido como custom stopword
     assert "especial" not in filtered  # Removido como custom stopword
-    assert "geladeira" in filtered     # Mantido
-    assert "de" not in filtered        # Removido como stopword padrão
+    assert "geladeira" in filtered  # Mantido
+    assert "de" not in filtered  # Removido como stopword padrão

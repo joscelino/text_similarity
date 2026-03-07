@@ -86,9 +86,7 @@ def test_compare_batch_strategy_vectorized(smart_comp):
 
 def test_compare_batch_invalid_strategy(smart_comp):
     with pytest.raises(ValueError, match="não suportada"):
-        smart_comp.compare_batch(
-            "qualquer", ["texto"], strategy="invalida"
-        )
+        smart_comp.compare_batch("qualquer", ["texto"], strategy="invalida")
 
 
 def test_compare_batch_empty_candidates(smart_comp):

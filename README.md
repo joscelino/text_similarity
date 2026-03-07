@@ -46,6 +46,12 @@ pip install "text-similarity-br[nlp]"
 python -m spacy download pt_core_news_sm
 ```
 
+Com suporte a **Similaridade Semântica (Word Embeddings / Redes Neurais)**:
+
+```bash
+pip install "text-similarity-br[semantic]"
+```
+
 ---
 
 ## 📖 Como Usar
@@ -103,6 +109,20 @@ comp_lab = Comparator.smart(entities=["date", "dimension"])
 ```
 
 > **Dica:** Filtrar entidades melhora a precisão evitando falsos positivos. Um extrator de `date` ativo num catálogo de produtos pode mapear incorretamente SKUs contendo dígitos de ano.
+
+### Modo Semântico (Word Embeddings)
+Para capturar a real intenção semântica entre sinônimos que não compartilham nenhuma letra (ex: `"veículo"` vs `"carro"`), você pode ativar o motor de **Sentence-Transformers**.
+
+```python
+from text_similarity.api import Comparator
+
+# Habilita o uso de modelos densos por debaixo dos panos
+comp = Comparator.smart(use_embeddings=True)
+
+score = comp.compare("automóvel bicombustível", "carro flex")
+print(f"Similaridade Semântica: {score:.2f}") # Alto score, diferentemente do TF-IDF puro.
+```
+*Atenção: A primeira chamada em cada processo isolado pode demorar alguns milisegundos a mais para carregar o modelo PyTorch na RAM. Nos métodos de Lote (`compare_batch` / `strategy="parallel"`), a Similaridade Semântica age como uma avaliação final super otimizada apenas nos `top_n` retornados pelo TF-IDF.*
 
 ### Processamento em Lote (Batch)
 Para casos de uso onde é necessário comparar uma *query* contra centenas ou milhares de candidatos, utilize o método `compare_batch`. Ele é altamente otimizado aplicando matrizes esparsas via Scikit-Learn e descartes (short-circuit) matemáticos. Entregando resultados consolidados até **~48x mais rápido** dependendo do volume.
@@ -264,6 +284,43 @@ texto_tratado, stats = pipeline.process(texto_bruto)
 
 print(texto_tratado)
 # Saída esperada (bag of words tratado): "limpar texto crz ver promo"
+```
+
+---
+
+## 📈 Calibração de Pesos (Grid Search)
+
+Para obter a melhor precisão em domínios específicos, você pode calibrar os pesos do algoritmo `HybridSimilarity` usando o `WeightCalibrator`. Ele permite testar múltiplas combinações de pesos contra um dataset "Gold Standard" (anotado manualmente) e gera um relatório detalhado de performance comparativa entre precisão e custo de tempo (latência).
+
+```python
+from text_similarity.api import Comparator
+from text_similarity.tuning.calibrator import WeightCalibrator
+
+comp = Comparator.smart()
+
+# Dataset de teste (Gold Standard)
+gold_standard = [
+    {"query": "casa", "target": "caza", "match": True},
+    {"query": "celular", "target": "fone", "match": False},
+]
+
+# Configurações de pesos que você deseja comparar
+configs = [
+    {"cosine": 0.5, "edit": 0.5},
+    {"edit": 1.0},
+    {"phonetic": 0.8, "cosine": 0.2},
+]
+
+calibrator = WeightCalibrator(comp, configs)
+report = calibrator.evaluate(gold_standard)
+
+# Exibe o dashboard de resultados (requer extra 'tuning')
+report.summary()
+```
+
+Para habilitar a visualização rica (rich terminal dashboard):
+```bash
+pip install "text-similarity-br[tuning]"
 ```
 
 ---

@@ -6,6 +6,7 @@ import logging
 from typing import List
 
 from .stage import PipelineContext, PipelineStage
+from text_similarity.exceptions import StageProcessingError
 
 logger = logging.getLogger(__name__)
 
@@ -43,7 +44,20 @@ class PreprocessingPipeline:
         for stage in self.stages:
             try:
                 ctx = stage.process(ctx)
-            except Exception as e:
-                logger.error(f"Erro no estágio {stage.__class__.__name__}: {e}")
+            except StageProcessingError:
+                # Já é exceção de pipeline, propague
+                raise
+            except (TypeError, ValueError) as e:
+                # Erro de dados/input inválido
+                raise StageProcessingError(stage.__class__.__name__, e) from e
+            except (UnicodeDecodeError, UnicodeEncodeError) as e:
+                # Erro de encoding
+                raise StageProcessingError(stage.__class__.__name__, e) from e
+            except OSError as e:
+                # Erro de I/O ou modelo não encontrado
+                raise StageProcessingError(stage.__class__.__name__, e) from e
+            except RuntimeError as e:
+                # Erro de runtime de backend NLP (ex: Regex, SpaCy)
+                raise StageProcessingError(stage.__class__.__name__, e) from e
 
         return ctx.text, ctx

@@ -15,16 +15,16 @@ from typing import Any, Dict, List, Optional, Tuple
 
 def _worker_process_queries(
     args: Tuple[
-        List[str],          # chunk_queries
-        List[str],          # candidates (originais)
-        List[str],          # p_candidates (pré-processados)
-        Any,                # cand_matrix (scipy sparse — pickle-safe)
-        Any,                # vectorizer (TfidfVectorizer — pickle-safe)
-        str,                # mode
+        List[str],  # chunk_queries
+        List[str],  # candidates (originais)
+        List[str],  # p_candidates (pré-processados)
+        Any,  # cand_matrix (scipy sparse — pickle-safe)
+        Any,  # vectorizer (TfidfVectorizer — pickle-safe)
+        str,  # mode
         Optional[List[str]],  # entities
-        Dict[str, float],   # algorithm_weights
-        int,                # top_n
-        float,              # min_cosine
+        Dict[str, float],  # algorithm_weights
+        int,  # top_n
+        float,  # min_cosine
     ],
 ) -> List[List[Dict[str, Any]]]:
     """Worker function executada em cada processo filho.
@@ -57,8 +57,13 @@ def _worker_process_queries(
 
     from text_similarity.api import Comparator
 
+    # Checa se o "semantic" estava habilitado na classe mãe
+    use_embeddings = algorithm_weights.get("semantic", 0.0) > 0.0
+
     # Recria o Comparator local (cada processo tem sua própria instância)
-    comp = Comparator(mode=mode, entities=entities, use_cache=True)
+    comp = Comparator(
+        mode=mode, entities=entities, use_cache=True, use_embeddings=use_embeddings
+    )
 
     # Sobrescreve os pesos do algoritmo para manter consistência
     if hasattr(comp.algorithm, "weights"):
@@ -71,9 +76,7 @@ def _worker_process_queries(
 
         try:
             query_vec = vectorizer.transform([p_query])
-            cosine_scores = sklearn_cosine_similarity(
-                query_vec, cand_matrix
-            )[0]
+            cosine_scores = sklearn_cosine_similarity(query_vec, cand_matrix)[0]
         except ValueError:
             chunk_results.append([])
             continue
@@ -134,25 +137,24 @@ def run_parallel_queries(
 
     # Caso degenerado: apenas 1 worker — sem overhead de multiprocessing
     if n_workers <= 1:
-        return _worker_process_queries((
-            queries,
-            candidates,
-            p_candidates,
-            cand_matrix,
-            vectorizer,
-            mode,
-            entities,
-            algorithm_weights,
-            top_n,
-            min_cosine,
-        ))
+        return _worker_process_queries(
+            (
+                queries,
+                candidates,
+                p_candidates,
+                cand_matrix,
+                vectorizer,
+                mode,
+                entities,
+                algorithm_weights,
+                top_n,
+                min_cosine,
+            )
+        )
 
     # Particionar queries em chunks
     chunk_size = math.ceil(len(queries) / n_workers)
-    chunks = [
-        queries[i: i + chunk_size]
-        for i in range(0, len(queries), chunk_size)
-    ]
+    chunks = [queries[i : i + chunk_size] for i in range(0, len(queries), chunk_size)]
 
     # Montar argumentos para cada worker
     worker_args = [
@@ -174,9 +176,7 @@ def run_parallel_queries(
     # Executar em paralelo
     all_results: List[List[Dict[str, Any]]] = []
     with ProcessPoolExecutor(max_workers=n_workers) as executor:
-        for chunk_results in executor.map(
-            _worker_process_queries, worker_args
-        ):
+        for chunk_results in executor.map(_worker_process_queries, worker_args):
             all_results.extend(chunk_results)
 
     return all_results

@@ -41,7 +41,7 @@ jobs:
 
     # Usa Trusted Publisher (OIDC) — sem necessidade de API token
     environment:
-      name: pypi
+      name: main
       url: https://pypi.org/p/text-similarity-br
 
     permissions:

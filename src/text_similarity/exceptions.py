@@ -26,12 +26,19 @@ class StageProcessingError(PipelineError):
     def __init__(
         self, stage_name: str, original_error: Exception, message: str | None = None
     ) -> None:
+        """Inicializa o erro do estágio capturando a causa raiz.
+
+        Args:
+            stage_name: Nome do estágio falho.
+            original_error: Exceção original capturada.
+            message: Mensagem customizada opcional.
+        """
         self.stage_name = stage_name
         self.original_error = original_error
 
-        msg = (
-            message
-            or f"Falha no estágio {stage_name}: {original_error.__class__.__name__} - {str(original_error)}"
+        msg = message or (
+            f"Falha no estágio {stage_name}: "
+            f"{original_error.__class__.__name__} - {str(original_error)}"
         )
         super().__init__(msg)
 

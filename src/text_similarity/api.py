@@ -108,7 +108,8 @@ class Comparator:
 
         Ativa a extração de entidades, unifica tokens, analisa a fonética PT-BR
         e cruza resultados de múltiplos algoritmos.
-        Se `use_embeddings=True`, ativa Similaridade Semântica baseada em vetores densos.
+        Se `use_embeddings=True`, ativa Similaridade Semântica baseada em
+        vetores densos.
         """
         return cls(
             mode="smart",

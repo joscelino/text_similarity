@@ -4,7 +4,6 @@ import pytest
 
 from text_similarity.api import Comparator
 
-
 # Segurança condicional para quem clona repositório limpo
 pytestmark = pytest.mark.skipif(
     not pytest.importorskip("sentence_transformers", exc_type=ImportError),
@@ -13,7 +12,9 @@ pytestmark = pytest.mark.skipif(
 
 
 def test_parallel_with_semantics_stress():
-    """Garante que rodar similaridade semântica em lote paralela funciona e não dá Memory/Pickle Error.
+    """Garante que rodar similaridade semântica em lote paralela funciona.
+
+    Evita Memory/Pickle Error.
 
     Na restrição arquitetural solicitada, a lógica léxica atua como filtro.
     Só depois (em _score_candidates) os embeddings são calculados.
@@ -59,9 +60,10 @@ def test_parallel_with_semantics_stress():
             if r["candidate"] in ["automóvel movido a gasolina", "carro flex"]:
                 details = r.get("details", {})
 
-                # Se entidade der match total (short-circuit), ele talvez nao tenha `semantic`.
+                # Se entidade der match total (short-circuit), ele talvez nao tenha
+                # `semantic`.
                 # Analisamos apenas os que passaram pelo funil matemático completo
-                if not "short_circuit" in details.get("entity", {}):
+                if "short_circuit" not in details.get("entity", {}):
                     assert "semantic" in details, (
                         "O peso Semantic_Similarity operou localmente."
                     )

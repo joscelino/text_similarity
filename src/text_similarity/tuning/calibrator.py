@@ -65,7 +65,7 @@ class WeightCalibrator:
                     else:
                         prep_cache[raw_text] = ""
 
-        # 2. Executar configurações 
+        # 2. Executar configurações
         all_results = []
         best_f1 = -1.0
         best_weights = {}
@@ -80,7 +80,7 @@ class WeightCalibrator:
                 self.comparator.algorithm.weights = cfg
 
             start_t = time.perf_counter()
-            
+
             # Contadores de Métricas Binárias
             tp, fp, fn, tn = 0, 0, 0, 0
             cfg_errors = []
@@ -96,7 +96,7 @@ class WeightCalibrator:
                 # Comparação super rápida via Cache (Não repassa pelo _process)
                 if not p_q or not p_t:
                     score = 0.0
-                else:    
+                else:
                     score = self.comparator.algorithm.compare(p_q, p_t)
 
                 predicted_match = score >= self.match_threshold

@@ -4,8 +4,8 @@ from typing import Any, Dict, List
 
 try:
     from rich.console import Console
-    from rich.table import Table
     from rich.panel import Panel
+    from rich.table import Table
 
     HAS_RICH = True
 except ImportError:
@@ -41,8 +41,10 @@ class CalibrationReport:
         """Fallback markdown se a library `rich` não estiver instalada."""
         print("\\n=== Dashboard de Calibração (Fallback) ===")
         print(f"🏆 Melhor Configuração: {self.best_weights}")
-        print(f"Resultados: F1-Score: {self.best_metrics.get('f1_score', 0):.3f} | Tempo: {self.best_metrics.get('total_time_ms', 0):.1f}ms")
-        
+        f1 = self.best_metrics.get("f1_score", 0)
+        t = self.best_metrics.get("total_time_ms", 0)
+        print(f"Resultados: F1-Score: {f1:.3f} | Tempo: {t:.1f}ms")
+
         print("\\n--- Histórico de Custo-Benefício ---")
         for res in self.all_results:
             w = res["weights"]
@@ -70,7 +72,7 @@ class CalibrationReport:
             # Destaque para a campeã
             is_best = res["weights"] == self.best_weights
             marker = "⭐ " if is_best else ""
-            
+
             table.add_row(
                 f"{marker}{w_str}",
                 f"{m.get('f1_score', 0):.3f}",
@@ -78,7 +80,7 @@ class CalibrationReport:
                 f"{m.get('recall', 0):.3f}",
                 f"{m.get('total_time_ms', 0):.1f} ms",
             )
-            
+
         console.print(table)
 
     def show_worst_errors(self) -> None:
@@ -89,18 +91,23 @@ class CalibrationReport:
 
         if HAS_RICH:
             console = Console()
-            console.print("\\n[bold red]🚨 Análise de Discrepância (Falsos Negativos)[/bold red]")
+            msg_hdr = (
+                "\\n[bold red]🚨 Análise de Discrepância "
+                "(Falsos Negativos)[/bold red]"
+            )
+            console.print(msg_hdr)
             for err in self.worst_errors:
                 q, t = err["query"], err["target"]
                 score = err["predicted_score"]
                 explain = err["explain"]
-                
+
                 # Descobrir o ofensor (quem puxou a nota pra baixo)
-                # Aquele cujo algoritmo teve o score individual muito mais baixo que seus pares
+                # Aquele cujo algoritmo teve o score individual muito mais
+                # baixo que seus pares
                 details = explain.get("details", {})
                 offender = None
                 lowest_score = 1.0
-                
+
                 for alg_name, data in details.items():
                     # Ignite entity or complex short-circuits to avoid False offender
                     if not isinstance(data, dict) or "score" not in data:
@@ -115,16 +122,21 @@ class CalibrationReport:
                     f"[white]Score Final:[/white] {score:.3f} (Puxado para baixo)\\n"
                 )
                 if offender:
-                    msg += f"[bold red]► Ofensor Detectado:[/bold red] O algoritmo '{offender}' marcou apenas {lowest_score:.2f}."
-                
-                console.print(Panel(msg, title="Falso Negativo Detalhado", expand=False))
+                    msg += (
+                        f"[bold red]► Ofensor Detectado:[/bold red] "
+                        f"O algoritmo '{offender}' marcou apenas {lowest_score:.2f}."
+                    )
+
+                console.print(
+                    Panel(msg, title="Falso Negativo Detalhado", expand=False)
+                )
         else:
             print("\\n=== Análise de Discrepância (Falsos Negativos) ===")
             for err in self.worst_errors[:5]:
                 q, t = err["query"], err["target"]
                 score = err["predicted_score"]
                 print(f"\\nQuery: {q}\\nTarget: {t}\\nScore: {score:.3f}")
-                
+
                 details = err["explain"].get("details", {})
                 offender = None
                 lowest_score = 1.0
@@ -133,9 +145,11 @@ class CalibrationReport:
                         if data["score"] < lowest_score:
                             lowest_score = data["score"]
                             offender = alg_name
-                
+
                 if offender:
-                    print(f"  -> OFENSOR: '{offender}' marcou apenas {lowest_score:.2f}")
+                    print(
+                        f"  -> OFENSOR: '{offender}' marcou apenas {lowest_score:.2f}"
+                    )
 
     def summary(self) -> None:
         """Imprime todo o painel consolidado."""

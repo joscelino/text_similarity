@@ -57,6 +57,9 @@ semantic = [
     "sentence-transformers>=2.0.0",
     "torch>=1.13.0,<2.5.0",
 ]
+tuning = [
+    "rich>=13.0.0",
+]
 
 [dependency-groups]
 dev = [

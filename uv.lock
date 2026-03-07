@@ -4709,6 +4709,9 @@ semantic = [
     { name = "sentence-transformers", version = "5.2.3", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version >= '3.10'" },
     { name = "torch" },
 ]
+tuning = [
+    { name = "rich" },
+]
 
 [package.dev-dependencies]
 dev = [
@@ -4730,12 +4733,13 @@ requires-dist = [
     { name = "dateparser", specifier = ">=1.2.2" },
     { name = "numpy", specifier = ">=1.24.4" },
     { name = "rapidfuzz", specifier = ">=3.9.7" },
+    { name = "rich", marker = "extra == 'tuning'", specifier = ">=13.0.0" },
     { name = "scikit-learn", specifier = ">=1.3.2" },
     { name = "sentence-transformers", marker = "extra == 'semantic'", specifier = ">=2.0.0" },
     { name = "spacy", marker = "extra == 'nlp'", specifier = ">=3.7.0" },
     { name = "torch", marker = "extra == 'semantic'", specifier = ">=1.13.0,<2.5.0" },
 ]
-provides-extras = ["nlp", "semantic"]
+provides-extras = ["nlp", "semantic", "tuning"]
 
 [package.metadata.requires-dev]
 dev = [

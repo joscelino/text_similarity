@@ -288,6 +288,43 @@ print(texto_tratado)
 
 ---
 
+## 📈 Calibração de Pesos (Grid Search)
+
+Para obter a melhor precisão em domínios específicos, você pode calibrar os pesos do algoritmo `HybridSimilarity` usando o `WeightCalibrator`. Ele permite testar múltiplas combinações de pesos contra um dataset "Gold Standard" (anotado manualmente) e gera um relatório detalhado de performance comparativa entre precisão e custo de tempo (latência).
+
+```python
+from text_similarity.api import Comparator
+from text_similarity.tuning.calibrator import WeightCalibrator
+
+comp = Comparator.smart()
+
+# Dataset de teste (Gold Standard)
+gold_standard = [
+    {"query": "casa", "target": "caza", "match": True},
+    {"query": "celular", "target": "fone", "match": False},
+]
+
+# Configurações de pesos que você deseja comparar
+configs = [
+    {"cosine": 0.5, "edit": 0.5},
+    {"edit": 1.0},
+    {"phonetic": 0.8, "cosine": 0.2},
+]
+
+calibrator = WeightCalibrator(comp, configs)
+report = calibrator.evaluate(gold_standard)
+
+# Exibe o dashboard de resultados (requer extra 'tuning')
+report.summary()
+```
+
+Para habilitar a visualização rica (rich terminal dashboard):
+```bash
+pip install "text-similarity-br[tuning]"
+```
+
+---
+
 ## ⚙️ Configuração do Cache
 
 A biblioteca mantém um cache in-memory (SHA-256) para evitar reprocessar o mesmo texto várias vezes pelo pipeline. Por padrão, o cache está **ativado**.

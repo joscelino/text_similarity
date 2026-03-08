@@ -210,14 +210,40 @@ comp = Comparator.smart(fusion_strategy="rrf", rrf_k=100)
 > - `fusion_strategy="linear"` (padrão) → Quando os algoritmos operam em escalas similares e os pesos foram calibrados para o seu domínio.
 > - `fusion_strategy="rrf"` → Quando mistura algoritmos com escalas distintas (ex: TF-IDF + Semântico), ou quando candidatos consistentemente bem posicionados em múltiplos rankings devem ser priorizados, independentemente do score absoluto.
 
-Também disponível via import direto para uso avançado:
+Também disponível via import direto para uso avançado — útil quando você já possui rankings próprios (ex: vindos de Elasticsearch, banco vetorial, ou algoritmos customizados) e quer fundi-los:
 
 ```python
 from text_similarity import RRFusion
 
+# Cada sublista é o ranking de UM algoritmo, ordenado por score descendente.
+# A estrutura é: [{"candidate": str, "score": float}, ...]
+rankings_por_algoritmo = [
+    # Ranking do algoritmo "cosine"
+    [
+        {"candidate": "Dell Inspiron 15 i5", "score": 0.92},
+        {"candidate": "Notebook Lenovo", "score": 0.45},
+        {"candidate": "Mouse Logitech", "score": 0.10},
+    ],
+    # Ranking do algoritmo "semantic"
+    [
+        {"candidate": "Dell Inspiron 15 i5", "score": 0.85},
+        {"candidate": "Mouse Logitech", "score": 0.30},
+        {"candidate": "Notebook Lenovo", "score": 0.20},
+    ],
+]
+
+# Nomes dos algoritmos, na MESMA ORDEM das sublistas acima
+nomes_algoritmos = ["cosine", "semantic"]
+
 rrf = RRFusion(k=60)
 ranking_fundido = rrf.fuse(rankings_por_algoritmo, nomes_algoritmos)
+
+for item in ranking_fundido:
+    print(f"Score RRF: {item['score']:.3f} | {item['candidate']}")
+    # Cada item inclui detalhes por algoritmo: rank, raw_score, rrf_contribution
 ```
+
+> **Nota:** No uso padrão via `Comparator.smart(fusion_strategy="rrf")`, esses rankings são montados automaticamente pelo `Comparator`. O import direto do `RRFusion` é para cenários onde você quer fundir rankings de fontes externas.
 
 ### Execução Paralela (`strategy="parallel"`)
 Para cenários de **alto volume** (50+ queries × 10k+ candidatos), ative a estratégia paralela que distribui as queries entre múltiplos processos via `ProcessPoolExecutor`:

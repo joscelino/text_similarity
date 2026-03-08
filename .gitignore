@@ -213,3 +213,4 @@ CLAUDE.md
 .agents/
 skills-lock.json
 dist/
+.vscode/

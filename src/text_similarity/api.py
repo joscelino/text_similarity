@@ -8,6 +8,7 @@ from __future__ import annotations
 from typing import Any, List, Literal
 
 from text_similarity.core.base import SimilarityAlgorithm
+from text_similarity.core.fusion import RRFusion
 from text_similarity.core.hybrid import HybridSimilarity
 from text_similarity.pipeline.backends import (
     CleanTextStage,
@@ -29,6 +30,8 @@ class Comparator:
         mode: str = "basic",
         entities: list[str] | None = None,
         use_cache: bool = True,
+        fusion_strategy: Literal["linear", "rrf"] = "linear",
+        rrf_k: int = 60,
         **kwargs: Any,
     ) -> None:
         """Inicializa a classe Comparator preparando o pipeline.
@@ -37,11 +40,21 @@ class Comparator:
             mode: Modo de operação ('basic' ou 'smart').
             entities: Lista de entidades para extrair no modo smart.
             use_cache: Se True, habilita o cache in-memory de textos processados.
+            fusion_strategy: Estratégia de fusão para operações batch.
+                ``"linear"`` (padrão) usa soma ponderada.
+                ``"rrf"`` usa Reciprocal Rank Fusion baseada em posição.
+            rrf_k: Parâmetro de suavização do RRF (padrão 60).
+                Ignorado quando ``fusion_strategy="linear"``.
             **kwargs: Argumentos arbitrários reservados para extensões futuras.
         """
         self.mode = mode
         self.entities = entities
         self.use_cache = use_cache
+        self.fusion_strategy = fusion_strategy
+        self.rrf_k = rrf_k
+        self._rrf_fusion: RRFusion | None = (
+            RRFusion(k=rrf_k) if fusion_strategy == "rrf" else None
+        )
 
         # Cache in-memory: hash SHA-256 do texto original → texto pré-processado
         self.cache: PipelineCache | None = PipelineCache() if use_cache else None
@@ -103,6 +116,8 @@ class Comparator:
         entities: list[str] | None = None,
         use_cache: bool = True,
         use_embeddings: bool = False,
+        fusion_strategy: Literal["linear", "rrf"] = "linear",
+        rrf_k: int = 60,
     ) -> "Comparator":
         """Instancia um Comparator no modo inteligente.
 
@@ -110,12 +125,22 @@ class Comparator:
         e cruza resultados de múltiplos algoritmos.
         Se `use_embeddings=True`, ativa Similaridade Semântica baseada em
         vetores densos.
+
+        Args:
+            entities: Lista de entidades para extrair.
+            use_cache: Habilita cache in-memory.
+            use_embeddings: Ativa similaridade semântica.
+            fusion_strategy: ``"linear"`` (soma ponderada) ou ``"rrf"``
+                (Reciprocal Rank Fusion). Afeta apenas operações batch.
+            rrf_k: Constante de suavização do RRF (padrão 60).
         """
         return cls(
             mode="smart",
             entities=entities,
             use_cache=use_cache,
             use_embeddings=use_embeddings,
+            fusion_strategy=fusion_strategy,
+            rrf_k=rrf_k,
         )
 
     def _process(self, text: str) -> str:
@@ -176,6 +201,9 @@ class Comparator:
         Reutilizado internamente por `compare_batch` e `compare_many_to_many`
         para computar os scores finais após a filtragem por cosseno.
 
+        Quando ``fusion_strategy="rrf"``, cada algoritmo produz um ranking
+        independente e o resultado final é fundido via Reciprocal Rank Fusion.
+
         Args:
             p_text: Texto da query já pré-processado.
             top_candidates: Lista de dicts com chaves 'candidate', 'p_candidate'
@@ -185,6 +213,17 @@ class Comparator:
             Lista de dicts com 'candidate', 'score' e 'details', ordenados
             por score final descendente.
         """
+        if self.fusion_strategy == "rrf" and self._rrf_fusion is not None:
+            return self._score_candidates_rrf(p_text, top_candidates)
+
+        return self._score_candidates_linear(p_text, top_candidates)
+
+    def _score_candidates_linear(
+        self,
+        p_text: str,
+        top_candidates: List[dict[str, Any]],
+    ) -> List[dict[str, Any]]:
+        """Scoring via combinação linear ponderada (estratégia padrão)."""
         results: List[dict[str, Any]] = []
 
         for cand in top_candidates:
@@ -254,6 +293,56 @@ class Comparator:
 
         results.sort(key=lambda x: x["score"], reverse=True)
         return results
+
+    def _score_candidates_rrf(
+        self,
+        p_text: str,
+        top_candidates: List[dict[str, Any]],
+    ) -> List[dict[str, Any]]:
+        """Scoring via Reciprocal Rank Fusion.
+
+        Cada algoritmo ativo produz um ranking independente dos candidatos.
+        Os rankings são fundidos pelo RRFusion, priorizando candidatos
+        que aparecem consistentemente no topo de múltiplas listas.
+        """
+        if not top_candidates or not isinstance(self.algorithm, HybridSimilarity):
+            return []
+
+        alg_weights = self.algorithm.weights
+        algs = self.algorithm.algorithms
+
+        # Identificar algoritmos ativos
+        active_algos: List[str] = []
+        for name in ["cosine", "entity", "edit", "phonetic", "semantic"]:
+            if name in alg_weights and alg_weights[name] > 0:
+                active_algos.append(name)
+
+        if not active_algos:
+            return []
+
+        # Montar um ranking por algoritmo
+        per_algo_rankings: List[List[dict[str, Any]]] = []
+
+        for algo_name in active_algos:
+            ranking: List[dict[str, Any]] = []
+
+            for cand in top_candidates:
+                c_p_text = cand["p_candidate"]
+
+                if algo_name == "cosine":
+                    score = cand["cos_score"]
+                else:
+                    score = algs[algo_name].compare(p_text, c_p_text)
+
+                ranking.append(
+                    {"candidate": cand["candidate"], "score": score}
+                )
+
+            ranking.sort(key=lambda x: x["score"], reverse=True)
+            per_algo_rankings.append(ranking)
+
+        assert self._rrf_fusion is not None
+        return self._rrf_fusion.fuse(per_algo_rankings, active_algos)
 
     def compare(self, text1: str, text2: str) -> float:
         """Compara dois textos e retorna um valor global de similaridade.
@@ -456,6 +545,8 @@ class Comparator:
                 top_n=top_n,
                 min_cosine=min_cosine,
                 n_workers=n_workers,
+                fusion_strategy=self.fusion_strategy,
+                rrf_k=self.rrf_k,
             )
 
         # Estratégia sequencial (vectorized)

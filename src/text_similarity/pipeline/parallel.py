@@ -25,6 +25,8 @@ def _worker_process_queries(
         Dict[str, float],  # algorithm_weights
         int,  # top_n
         float,  # min_cosine
+        str,  # fusion_strategy
+        int,  # rrf_k
     ],
 ) -> List[List[Dict[str, Any]]]:
     """Worker function executada em cada processo filho.
@@ -49,6 +51,8 @@ def _worker_process_queries(
         algorithm_weights,
         top_n,
         min_cosine,
+        fusion_strategy,
+        rrf_k,
     ) = args
 
     from sklearn.metrics.pairwise import (
@@ -62,7 +66,12 @@ def _worker_process_queries(
 
     # Recria o Comparator local (cada processo tem sua própria instância)
     comp = Comparator(
-        mode=mode, entities=entities, use_cache=True, use_embeddings=use_embeddings
+        mode=mode,
+        entities=entities,
+        use_cache=True,
+        use_embeddings=use_embeddings,
+        fusion_strategy=fusion_strategy,
+        rrf_k=rrf_k,
     )
 
     # Sobrescreve os pesos do algoritmo para manter consistência
@@ -105,6 +114,8 @@ def run_parallel_queries(
     top_n: int,
     min_cosine: float,
     n_workers: Optional[int] = None,
+    fusion_strategy: str = "linear",
+    rrf_k: int = 60,
 ) -> List[List[Dict[str, Any]]]:
     """Orquestra a execução paralela de queries via ProcessPoolExecutor.
 
@@ -124,6 +135,8 @@ def run_parallel_queries(
         top_n: Número máximo de candidatos por query.
         min_cosine: Limiar mínimo de cosseno.
         n_workers: Número de processos. Se None, usa ``os.cpu_count()``.
+        fusion_strategy: Estratégia de fusão (``"linear"`` ou ``"rrf"``).
+        rrf_k: Constante de suavização do RRF.
 
     Returns:
         Lista de listas de resultados — uma para cada query,
@@ -149,6 +162,8 @@ def run_parallel_queries(
                 algorithm_weights,
                 top_n,
                 min_cosine,
+                fusion_strategy,
+                rrf_k,
             )
         )
 
@@ -169,6 +184,8 @@ def run_parallel_queries(
             algorithm_weights,
             top_n,
             min_cosine,
+            fusion_strategy,
+            rrf_k,
         )
         for chunk in chunks
     ]

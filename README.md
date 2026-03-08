@@ -39,17 +39,13 @@ Uma biblioteca Python otimizada e especializada na comparação de similaridade 
 pip install text-similarity-br
 ```
 
+A partir da versão 0.4.0, o pacote já inclui `sentence-transformers` como dependência, habilitando **Similaridade Semântica** sem instalação adicional.
+
 Com suporte a lematização via SpaCy (opcional):
 
 ```bash
 pip install "text-similarity-br[nlp]"
 python -m spacy download pt_core_news_sm
-```
-
-Com suporte a **Similaridade Semântica (Word Embeddings / Redes Neurais)**:
-
-```bash
-pip install "text-similarity-br[semantic]"
 ```
 
 ---
@@ -71,7 +67,7 @@ print(f"Similaridade: {score:.2f}") # Output ~0.8 a 1.0 depending on weight
 ```
 
 ### Modo "Smart" (Entidades e Fonética)
-Ativa nativamente os extratores de Moeda, Data, Dimensões, Modelos de Produto e aplica cálculos fonéticos.
+Ativa nativamente os extratores de Moeda, Data, Dimensões, Modelos de Produto e aplica cálculos fonéticos. Aceita os parâmetros `fusion_strategy` (`"linear"` ou `"rrf"`) e `rrf_k` para controlar a fusão dos rankings em operações batch.
 
 ```python
 from text_similarity.api import Comparator
@@ -180,6 +176,48 @@ for query, resultados in zip(buscas, todos_resultados):
 > **Quando usar qual?**
 > - `compare_batch()` → 1 query × N candidatos (ex: busca textual de um usuário).
 > - `compare_many_to_many()` → M queries × N candidatos (ex: deduplicação em lote, cruzamento de bases).
+
+### Fusão de Rankings via RRF (`fusion_strategy="rrf"`)
+Por padrão, o `Comparator` combina os scores dos algoritmos por **soma ponderada** (estratégia `"linear"`). Para cenários onde os scores brutos dos algoritmos possuem escalas muito diferentes (ex: mistura de léxico com semântica), você pode usar **Reciprocal Rank Fusion (RRF)**, que baseia-se na **posição** dos candidatos em cada ranking em vez dos scores brutos:
+
+```python
+from text_similarity.api import Comparator
+
+# RRF: combina rankings por posição, eliminando problemas de escala
+comp = Comparator.smart(fusion_strategy="rrf")
+
+resultados = comp.compare_batch(
+    "Notebook Dell Inspiron",
+    candidatos,
+    top_n=10,
+    min_cosine=0.1,
+)
+
+# Cada resultado inclui detalhes do RRF: rank e contribuição de cada algoritmo
+for r in resultados:
+    print(f"Score: {r['score']:.2f} | {r['candidate']}")
+    print(f"  Detalhes: {r['details']}")
+```
+
+O parâmetro `rrf_k` (padrão 60) controla a suavização: valores maiores atenuam a diferença entre posições no ranking.
+
+```python
+# RRF com suavização mais agressiva
+comp = Comparator.smart(fusion_strategy="rrf", rrf_k=100)
+```
+
+> **Quando usar `"rrf"` vs `"linear"`:**
+> - `fusion_strategy="linear"` (padrão) → Quando os algoritmos operam em escalas similares e os pesos foram calibrados para o seu domínio.
+> - `fusion_strategy="rrf"` → Quando mistura algoritmos com escalas distintas (ex: TF-IDF + Semântico), ou quando candidatos consistentemente bem posicionados em múltiplos rankings devem ser priorizados, independentemente do score absoluto.
+
+Também disponível via import direto para uso avançado:
+
+```python
+from text_similarity import RRFusion
+
+rrf = RRFusion(k=60)
+ranking_fundido = rrf.fuse(rankings_por_algoritmo, nomes_algoritmos)
+```
 
 ### Execução Paralela (`strategy="parallel"`)
 Para cenários de **alto volume** (50+ queries × 10k+ candidatos), ative a estratégia paralela que distribui as queries entre múltiplos processos via `ProcessPoolExecutor`:

@@ -32,6 +32,7 @@ class Comparator:
         use_cache: bool = True,
         fusion_strategy: Literal["linear", "rrf"] = "linear",
         rrf_k: int = 60,
+        rrf_weights: dict[str, float] | None = None,
         **kwargs: Any,
     ) -> None:
         """Inicializa a classe Comparator preparando o pipeline.
@@ -45,6 +46,10 @@ class Comparator:
                 ``"rrf"`` usa Reciprocal Rank Fusion baseada em posição.
             rrf_k: Parâmetro de suavização do RRF (padrão 60).
                 Ignorado quando ``fusion_strategy="linear"``.
+            rrf_weights: Pesos por algoritmo para o RRF (ex:
+                ``{"cosine": 0.6, "semantic": 0.4}``). Se ``None``,
+                todos os algoritmos contribuem igualmente.
+                Ignorado quando ``fusion_strategy="linear"``.
             **kwargs: Argumentos arbitrários reservados para extensões futuras.
         """
         self.mode = mode
@@ -52,8 +57,11 @@ class Comparator:
         self.use_cache = use_cache
         self.fusion_strategy = fusion_strategy
         self.rrf_k = rrf_k
+        self.rrf_weights = rrf_weights
         self._rrf_fusion: RRFusion | None = (
-            RRFusion(k=rrf_k) if fusion_strategy == "rrf" else None
+            RRFusion(k=rrf_k, weights=rrf_weights)
+            if fusion_strategy == "rrf"
+            else None
         )
 
         # Cache in-memory: hash SHA-256 do texto original → texto pré-processado
@@ -118,6 +126,7 @@ class Comparator:
         use_embeddings: bool = False,
         fusion_strategy: Literal["linear", "rrf"] = "linear",
         rrf_k: int = 60,
+        rrf_weights: dict[str, float] | None = None,
     ) -> "Comparator":
         """Instancia um Comparator no modo inteligente.
 
@@ -133,6 +142,9 @@ class Comparator:
             fusion_strategy: ``"linear"`` (soma ponderada) ou ``"rrf"``
                 (Reciprocal Rank Fusion). Afeta apenas operações batch.
             rrf_k: Constante de suavização do RRF (padrão 60).
+            rrf_weights: Pesos por algoritmo para o RRF (ex:
+                ``{"cosine": 0.6, "semantic": 0.4}``). Se ``None``,
+                todos os algoritmos contribuem igualmente.
         """
         return cls(
             mode="smart",
@@ -141,6 +153,7 @@ class Comparator:
             use_embeddings=use_embeddings,
             fusion_strategy=fusion_strategy,
             rrf_k=rrf_k,
+            rrf_weights=rrf_weights,
         )
 
     def _process(self, text: str) -> str:
@@ -547,6 +560,7 @@ class Comparator:
                 n_workers=n_workers,
                 fusion_strategy=self.fusion_strategy,
                 rrf_k=self.rrf_k,
+                rrf_weights=self.rrf_weights,
             )
 
         # Estratégia sequencial (vectorized)

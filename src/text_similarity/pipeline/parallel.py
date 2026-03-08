@@ -27,6 +27,7 @@ def _worker_process_queries(
         float,  # min_cosine
         str,  # fusion_strategy
         int,  # rrf_k
+        Optional[Dict[str, float]],  # rrf_weights
     ],
 ) -> List[List[Dict[str, Any]]]:
     """Worker function executada em cada processo filho.
@@ -53,6 +54,7 @@ def _worker_process_queries(
         min_cosine,
         fusion_strategy,
         rrf_k,
+        rrf_weights,
     ) = args
 
     from sklearn.metrics.pairwise import (
@@ -72,6 +74,7 @@ def _worker_process_queries(
         use_embeddings=use_embeddings,
         fusion_strategy=fusion_strategy,
         rrf_k=rrf_k,
+        rrf_weights=rrf_weights,
     )
 
     # Sobrescreve os pesos do algoritmo para manter consistência
@@ -116,6 +119,7 @@ def run_parallel_queries(
     n_workers: Optional[int] = None,
     fusion_strategy: str = "linear",
     rrf_k: int = 60,
+    rrf_weights: Optional[Dict[str, float]] = None,
 ) -> List[List[Dict[str, Any]]]:
     """Orquestra a execução paralela de queries via ProcessPoolExecutor.
 
@@ -137,6 +141,7 @@ def run_parallel_queries(
         n_workers: Número de processos. Se None, usa ``os.cpu_count()``.
         fusion_strategy: Estratégia de fusão (``"linear"`` ou ``"rrf"``).
         rrf_k: Constante de suavização do RRF.
+        rrf_weights: Pesos por algoritmo para o RRF.
 
     Returns:
         Lista de listas de resultados — uma para cada query,
@@ -164,6 +169,7 @@ def run_parallel_queries(
                 min_cosine,
                 fusion_strategy,
                 rrf_k,
+                rrf_weights,
             )
         )
 
@@ -186,6 +192,7 @@ def run_parallel_queries(
             min_cosine,
             fusion_strategy,
             rrf_k,
+            rrf_weights,
         )
         for chunk in chunks
     ]

@@ -161,3 +161,50 @@ class TestRRFBackwardCompatibility:
         assert RRF is not None
         instance = RRF(k=30)
         assert instance.k == 30
+
+
+class TestRRFWeightsIntegration:
+    """Testes de integração dos pesos por algoritmo no RRF via Comparator."""
+
+    def test_smart_factory_accepts_rrf_weights(self) -> None:
+        """Comparator.smart() deve aceitar rrf_weights."""
+        weights = {"cosine": 0.7, "edit": 0.3}
+        comp = Comparator.smart(fusion_strategy="rrf", rrf_weights=weights)
+        assert comp.rrf_weights == weights
+        assert comp._rrf_fusion is not None
+        assert comp._rrf_fusion.weights == weights
+
+    def test_default_rrf_weights_is_none(self) -> None:
+        """Sem rrf_weights, o padrão é None (pesos iguais)."""
+        comp = Comparator.smart(fusion_strategy="rrf")
+        assert comp.rrf_weights is None
+        assert comp._rrf_fusion is not None
+        assert comp._rrf_fusion.weights is None
+
+    def test_rrf_weights_ignored_on_linear(self) -> None:
+        """rrf_weights é ignorado quando fusion_strategy='linear'."""
+        comp = Comparator.smart(
+            fusion_strategy="linear",
+            rrf_weights={"cosine": 0.8, "edit": 0.2},
+        )
+        assert comp._rrf_fusion is None
+
+    def test_weighted_rrf_batch_returns_valid_results(self) -> None:
+        """compare_batch com RRF ponderado deve retornar resultados válidos."""
+        comp = Comparator.smart(
+            fusion_strategy="rrf",
+            rrf_weights={"cosine": 0.7, "edit": 0.2, "phonetic": 0.1},
+        )
+        results = comp.compare_batch(
+            "arroz branco tipo 1",
+            ["arroz branco 5kg", "feijao preto", "macarrao"],
+            top_n=10,
+            min_cosine=0.0,
+        )
+
+        assert len(results) > 0
+        for r in results:
+            assert r["fusion"] == "rrf"
+            assert 0.0 <= r["score"] <= 1.0
+            for algo_details in r["details"].values():
+                assert "weight" in algo_details

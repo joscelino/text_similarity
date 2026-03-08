@@ -79,7 +79,7 @@ novo_score = comp.compare("Foi me cobrado 30 reais", "O preço é R$ 30,00")
 print(f"Similaridade Smart: {novo_score:.2f}") 
 # Resultado alto por conta da identificação da entidade financeira exata
 
-# --- Novo Recurso: Interseção Perfeita de Modelos (Short-circuit) ---
+# --- Interseção Perfeita de Modelos (Short-circuit) ---
 score_modelo = comp.compare("GN500", "Temos as peças GN 500, GN 1000 e SK 200")
 print(f"Score Modelo Embutido: {score_modelo:.2f}")
 # Resultado: ~0.95. Ao localizar o modelo procurado "GN500" isolado no meio do 
@@ -206,9 +206,33 @@ O parâmetro `rrf_k` (padrão 60) controla a suavização: valores maiores atenu
 comp = Comparator.smart(fusion_strategy="rrf", rrf_k=100)
 ```
 
+#### Pesos por Algoritmo (`rrf_weights`)
+
+Por padrão, todos os algoritmos contribuem igualmente no RRF. Use `rrf_weights` para dar mais importância a algoritmos específicos — por exemplo, priorizando similaridade semântica sobre busca léxica:
+
+```python
+from text_similarity.api import Comparator
+
+# Prioriza semântica (70%) sobre léxico (30%) no ranking final
+comp = Comparator.smart(
+    use_embeddings=True,
+    fusion_strategy="rrf",
+    rrf_weights={"cosine": 0.3, "semantic": 0.7},
+)
+
+# Prioriza fonética para domínios com erros de digitação frequentes
+comp_fon = Comparator.smart(
+    fusion_strategy="rrf",
+    rrf_weights={"cosine": 0.3, "edit": 0.2, "phonetic": 0.5},
+)
+```
+
+A fórmula aplicada é: `score = Σ weight_i * 1/(k + rank_i)`. Algoritmos não listados em `rrf_weights` recebem peso `1.0` por padrão.
+
 > **Quando usar `"rrf"` vs `"linear"`:**
 > - `fusion_strategy="linear"` (padrão) → Quando os algoritmos operam em escalas similares e os pesos foram calibrados para o seu domínio.
 > - `fusion_strategy="rrf"` → Quando mistura algoritmos com escalas distintas (ex: TF-IDF + Semântico), ou quando candidatos consistentemente bem posicionados em múltiplos rankings devem ser priorizados, independentemente do score absoluto.
+> - `rrf_weights` → Quando, além de usar RRF, você quer que determinado algoritmo tenha mais influência na posição final do ranking.
 
 Também disponível via import direto para uso avançado — útil quando você já possui rankings próprios (ex: vindos de Elasticsearch, banco vetorial, ou algoritmos customizados) e quer fundi-los:
 
@@ -235,12 +259,17 @@ rankings_por_algoritmo = [
 # Nomes dos algoritmos, na MESMA ORDEM das sublistas acima
 nomes_algoritmos = ["cosine", "semantic"]
 
+# Pesos iguais (padrão)
 rrf = RRFusion(k=60)
+
+# Ou com pesos por algoritmo
+rrf = RRFusion(k=60, weights={"cosine": 0.4, "semantic": 0.6})
+
 ranking_fundido = rrf.fuse(rankings_por_algoritmo, nomes_algoritmos)
 
 for item in ranking_fundido:
     print(f"Score RRF: {item['score']:.3f} | {item['candidate']}")
-    # Cada item inclui detalhes por algoritmo: rank, raw_score, rrf_contribution
+    # Cada item inclui detalhes: rank, raw_score, rrf_contribution, weight
 ```
 
 > **Nota:** No uso padrão via `Comparator.smart(fusion_strategy="rrf")`, esses rankings são montados automaticamente pelo `Comparator`. O import direto do `RRFusion` é para cenários onde você quer fundir rankings de fontes externas.

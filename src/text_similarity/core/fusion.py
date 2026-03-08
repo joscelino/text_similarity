@@ -16,17 +16,31 @@ class RRFusion:
 
     Funde resultados de diferentes algoritmos (ex: Léxico e Semântico)
     baseando-se na posição dos candidatos em cada ranking, em vez de
-    seus scores brutos. A fórmula aplicada é: ``score = Σ 1/(k + rank)``.
+    seus scores brutos.
+
+    Quando ``weights`` é fornecido, aplica a fórmula ponderada:
+    ``score = Σ weight_i * 1/(k + rank_i)``.
+
+    Quando ``weights`` é ``None`` (padrão), todos os algoritmos
+    contribuem igualmente: ``score = Σ 1/(k + rank)``.
 
     Args:
         k: Parâmetro de suavização que controla a influência de itens
             em posições baixas no ranking. Valores maiores atenuam a
             diferença entre posições (padrão 60, conforme literatura).
+        weights: Dicionário de pesos por algoritmo (ex:
+            ``{"cosine": 0.6, "semantic": 0.4}``). Se ``None``,
+            todos os algoritmos recebem peso igual (1.0).
     """
 
-    def __init__(self, k: int = 60) -> None:
-        """Inicializa o fusionador com a constante de suavização k."""
+    def __init__(
+        self,
+        k: int = 60,
+        weights: Dict[str, float] | None = None,
+    ) -> None:
+        """Inicializa o fusionador com a constante de suavização k e pesos opcionais."""
         self.k = k
+        self.weights = weights
 
     def fuse(
         self,
@@ -64,8 +78,16 @@ class RRFusion:
         if n_algorithms == 0:
             return []
 
+        # Resolver pesos por algoritmo
+        algo_weights: Dict[str, float] = {}
+        for name in algorithm_names:
+            if self.weights is not None and name in self.weights:
+                algo_weights[name] = self.weights[name]
+            else:
+                algo_weights[name] = 1.0
+
         # Máximo teórico: candidato em rank 1 em todos os algoritmos
-        max_rrf = n_algorithms / (self.k + 1)
+        max_rrf = sum(w / (self.k + 1) for w in algo_weights.values())
 
         # Acumuladores por candidato
         rrf_scores: Dict[str, float] = {}
@@ -73,6 +95,7 @@ class RRFusion:
 
         for algo_idx, ranking in enumerate(rankings):
             algo_name = algorithm_names[algo_idx]
+            weight = algo_weights[algo_name]
             ranking_size = len(ranking)
 
             # Mapear candidatos presentes nesta lista
@@ -83,7 +106,7 @@ class RRFusion:
                 raw_score = item["score"]
                 candidates_in_ranking.add(candidate)
 
-                rrf_contribution = 1.0 / (self.k + rank)
+                rrf_contribution = weight * 1.0 / (self.k + rank)
 
                 rrf_scores[candidate] = (
                     rrf_scores.get(candidate, 0.0) + rrf_contribution
@@ -95,11 +118,12 @@ class RRFusion:
                     "rank": rank,
                     "raw_score": raw_score,
                     "rrf_contribution": rrf_contribution,
+                    "weight": weight,
                 }
 
             # Penalizar candidatos ausentes desta lista
             penalty_rank = ranking_size + 1
-            penalty_contribution = 1.0 / (self.k + penalty_rank)
+            penalty_contribution = weight * 1.0 / (self.k + penalty_rank)
 
             for candidate in rrf_scores:
                 if candidate not in candidates_in_ranking:
@@ -112,6 +136,7 @@ class RRFusion:
                             "rank": penalty_rank,
                             "raw_score": 0.0,
                             "rrf_contribution": penalty_contribution,
+                            "weight": weight,
                         }
 
         # Montar resultado normalizado

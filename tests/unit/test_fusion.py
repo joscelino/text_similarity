@@ -222,6 +222,97 @@ class TestRRFusionParameterK:
         assert rrf.k == 60
 
 
+class TestRRFusionWeights:
+    """Testes de pesos por algoritmo no RRF."""
+
+    def test_default_weights_is_none(self) -> None:
+        """Sem weights, todos os algoritmos contribuem igualmente."""
+        rrf = RRFusion()
+        assert rrf.weights is None
+
+    def test_weighted_rrf_favors_heavier_algorithm(self) -> None:
+        """Algoritmo com peso maior deve influenciar mais o ranking final."""
+        # A é #1 em "cosine" (peso alto), B é #1 em "edit" (peso baixo)
+        rankings = [
+            [
+                {"candidate": "A", "score": 0.9},
+                {"candidate": "B", "score": 0.5},
+            ],
+            [
+                {"candidate": "B", "score": 0.8},
+                {"candidate": "A", "score": 0.3},
+            ],
+        ]
+
+        # Sem pesos: A e B empatam (simétrico)
+        rrf_equal = RRFusion(k=60)
+        result_equal = rrf_equal.fuse(rankings, ["cosine", "edit"])
+        assert result_equal[0]["score"] == pytest.approx(result_equal[1]["score"])
+
+        # Com peso 0.8 para cosine: A deve vencer (é #1 no algoritmo pesado)
+        rrf_weighted = RRFusion(k=60, weights={"cosine": 0.8, "edit": 0.2})
+        result_weighted = rrf_weighted.fuse(rankings, ["cosine", "edit"])
+        assert result_weighted[0]["candidate"] == "A"
+        assert result_weighted[0]["score"] > result_weighted[1]["score"]
+
+    def test_weighted_rrf_formula_correctness(self) -> None:
+        """Verifica o cálculo RRF ponderado manualmente."""
+        weights = {"algo1": 0.7, "algo2": 0.3}
+        rrf = RRFusion(k=60, weights=weights)
+        rankings = [
+            [
+                {"candidate": "X", "score": 0.9},
+                {"candidate": "Y", "score": 0.5},
+            ],
+            [
+                {"candidate": "Y", "score": 0.8},
+                {"candidate": "X", "score": 0.3},
+            ],
+        ]
+        result = rrf.fuse(rankings, ["algo1", "algo2"])
+
+        # X: rank 1 em algo1 (0.7/61) + rank 2 em algo2 (0.3/62)
+        expected_x = 0.7 / 61 + 0.3 / 62
+        # Y: rank 2 em algo1 (0.7/62) + rank 1 em algo2 (0.3/61)
+        expected_y = 0.7 / 62 + 0.3 / 61
+        # Máximo teórico: rank 1 em ambos
+        max_rrf = 0.7 / 61 + 0.3 / 61
+
+        x_result = next(r for r in result if r["candidate"] == "X")
+        y_result = next(r for r in result if r["candidate"] == "Y")
+
+        assert x_result["score"] == pytest.approx(expected_x / max_rrf)
+        assert y_result["score"] == pytest.approx(expected_y / max_rrf)
+        # X deve ter score maior (é #1 no algoritmo com peso 0.7)
+        assert x_result["score"] > y_result["score"]
+
+    def test_details_contain_weight_field(self) -> None:
+        """Detalhes devem incluir o peso aplicado por algoritmo."""
+        rrf = RRFusion(k=60, weights={"cosine": 0.6, "edit": 0.4})
+        rankings = [
+            [{"candidate": "A", "score": 0.9}],
+            [{"candidate": "A", "score": 0.7}],
+        ]
+        result = rrf.fuse(rankings, ["cosine", "edit"])
+
+        details = result[0]["details"]
+        assert details["cosine"]["weight"] == pytest.approx(0.6)
+        assert details["edit"]["weight"] == pytest.approx(0.4)
+
+    def test_partial_weights_defaults_missing_to_one(self) -> None:
+        """Algoritmos sem peso explícito recebem peso 1.0."""
+        rrf = RRFusion(k=60, weights={"cosine": 0.5})
+        rankings = [
+            [{"candidate": "A", "score": 0.9}],
+            [{"candidate": "A", "score": 0.7}],
+        ]
+        result = rrf.fuse(rankings, ["cosine", "edit"])
+
+        details = result[0]["details"]
+        assert details["cosine"]["weight"] == pytest.approx(0.5)
+        assert details["edit"]["weight"] == pytest.approx(1.0)
+
+
 class TestRRFusionEdgeCases:
     """Testes de casos limítrofes."""
 

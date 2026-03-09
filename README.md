@@ -206,6 +206,18 @@ O parâmetro `rrf_k` (padrão 60) controla a suavização: valores maiores atenu
 comp = Comparator.smart(fusion_strategy="rrf", rrf_k=100)
 ```
 
+#### Opções de Pesos e Algoritmos
+
+Ao utilizar o modo `smart`, você pode equilibrar os seguintes algoritmos através do parâmetro `weights` (no construtor) ou `rrf_weights` (nas funções de média/batch):
+
+| Opção | Nome Técnico | O que avalia | Melhor uso |
+| :--- | :--- | :--- | :--- |
+| **`cosine`** | Cosseno (TF-IDF) | Frequência e raridade das palavras. | Detectar palavras-chave idênticas. |
+| **`edit`** | Levenshtein | Proximidade de caracteres (escrita). | Capturar erros de digitação (typos). |
+| **`phonetic`** | Fonética (PT-BR) | Pronúncia das palavras em português. | Capturar trocas de letras com som igual (ex: S/Z/X). |
+| **`semantic`** | Semântica | Significado e contexto (Embeddings). | Encontrar sinônimos (ex: "carro" vs "veículo"). |
+| **`entity`** | Entidades | Identificadores específicos. | Garantir que códigos e modelos coincidam. |
+
 #### Pesos por Algoritmo (`rrf_weights`)
 
 Por padrão, todos os algoritmos contribuem igualmente no RRF. Use `rrf_weights` para dar mais importância a algoritmos específicos — por exemplo, priorizando similaridade semântica sobre busca léxica:

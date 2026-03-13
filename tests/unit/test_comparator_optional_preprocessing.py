@@ -2,11 +2,15 @@
 
 Valida que quando ``preprocess=False``, o pipeline NÃO é executado
 e os textos passam inalterados para os algoritmos de similaridade.
+
+Cobertura das Fases 1-4 da Feature 1 (Tratamento de Dados Opcional).
 """
 
 from __future__ import annotations
 
 from unittest.mock import patch
+
+import pytest
 
 from text_similarity.api import Comparator
 
@@ -181,3 +185,274 @@ class TestPreprocessFalseTextIntegrity:
             mock.assert_not_called()
 
         assert isinstance(score, float)
+
+
+# =====================================================================
+# Fase 3: Integração com HybridSimilarity (strings já limpas)
+# =====================================================================
+
+
+class TestHybridSimilarityWithCleanStrings:
+    """Valida que todos os algoritmos do HybridSimilarity operam
+    corretamente sobre strings já limpas quando preprocess=False."""
+
+    def test_smart_mode_all_algorithms_with_clean_text(self) -> None:
+        """Smart mode (cosine+edit+phonetic+entity) produz scores válidos."""
+        comp = Comparator.smart(entities=["product_model", "money"])
+
+        clean1 = "samsung galaxy s22 ultra 256gb"
+        clean2 = "samsung galaxy s22 ultra 128gb"
+
+        result = comp.explain(clean1, clean2, preprocess=False)
+
+        assert 0.0 <= result["score"] <= 1.0
+        assert "details" in result
+        # Algoritmos ativos devem estar presentes nos detalhes
+        details = result["details"]
+        assert any(
+            key in details for key in ("cosine", "edit", "phonetic", "entity")
+        )
+
+    def test_smart_mode_entity_short_circuit_with_clean_text(self) -> None:
+        """Short-circuit de entidade funciona com preprocess=False."""
+        comp = Comparator.smart(entities=["product_model"])
+
+        # Textos já limpos que compartilham modelo de produto
+        score = comp.compare(
+            "<productmodel:GN500>",
+            "pecas <productmodel:GN500> <productmodel:GN1000>",
+            preprocess=False,
+        )
+        assert score >= 0.9  # Short-circuit deve ativar
+
+    def test_smart_explain_returns_all_active_algorithms(self) -> None:
+        """explain() com preprocess=False retorna detalhes de todos os algoritmos."""
+        comp = Comparator.smart()
+
+        result = comp.explain(
+            "notebook dell inspiron 15",
+            "notebook dell inspiron 15 polegadas",
+            preprocess=False,
+        )
+
+        assert "score" in result
+        assert "details" in result
+        # Modo smart padrão tem: cosine, edit, phonetic, entity
+        for algo in ("cosine", "edit", "phonetic", "entity"):
+            assert algo in result["details"], f"Algoritmo '{algo}' ausente nos detalhes"
+
+    def test_batch_smart_mode_with_clean_strings(self) -> None:
+        """compare_batch no modo smart com strings limpas retorna resultados."""
+        comp = Comparator.smart()
+
+        candidates = [
+            "notebook dell inspiron 15 i5",
+            "mouse logitech wireless",
+            "monitor samsung 27 4k",
+        ]
+
+        results = comp.compare_batch(
+            "notebook dell inspiron",
+            candidates,
+            preprocess=False,
+        )
+
+        assert len(results) > 0
+        for r in results:
+            assert 0.0 <= r["score"] <= 1.0
+            assert "candidate" in r
+            assert "details" in r
+
+
+# =====================================================================
+# Fase 4: Verificação de ausência de spaCy e Joblib
+# =====================================================================
+
+
+class TestBypassDoesNotEngageDependencies:
+    """Garante que preprocess=False não aciona spaCy nem Joblib."""
+
+    def test_lemmatize_stage_not_called(self) -> None:
+        """LemmatizeStage.process() NÃO é chamado com preprocess=False."""
+        comp = Comparator.basic()
+
+        # Encontrar o LemmatizeStage no pipeline
+        from text_similarity.pipeline.backends import LemmatizeStage
+
+        lemma_stage = None
+        for stage in comp.pipeline.stages:
+            if isinstance(stage, LemmatizeStage):
+                lemma_stage = stage
+                break
+
+        assert lemma_stage is not None, "LemmatizeStage deveria existir no pipeline"
+
+        with patch.object(lemma_stage, "process") as mock:
+            comp.compare("texto limpo", "texto limpo", preprocess=False)
+            mock.assert_not_called()
+
+    def test_cache_hash_not_called(self) -> None:
+        """PipelineCache.hash_text() NÃO é chamado com preprocess=False."""
+        comp = Comparator.smart(use_cache=True)
+
+        assert comp.cache is not None
+
+        with patch.object(comp.cache, "hash_text") as mock:
+            comp.compare("texto limpo", "outro texto", preprocess=False)
+            mock.assert_not_called()
+
+    def test_normalize_entities_stage_not_called(self) -> None:
+        """NormalizeEntitiesStage.process() NÃO é chamado com preprocess=False."""
+        comp = Comparator.smart(entities=["money", "date", "dimension"])
+
+        from text_similarity.pipeline.backends import NormalizeEntitiesStage
+
+        entity_stage = None
+        for stage in comp.pipeline.stages:
+            if isinstance(stage, NormalizeEntitiesStage):
+                entity_stage = stage
+                break
+
+        assert entity_stage is not None, "NormalizeEntitiesStage deveria existir no smart"
+
+        with patch.object(entity_stage, "process") as mock:
+            comp.compare(
+                "trinta reais ontem",
+                "R$ 30,00 12/03/2023",
+                preprocess=False,
+            )
+            mock.assert_not_called()
+
+    def test_clear_cache_works_after_preprocess_false_only(self) -> None:
+        """clear_cache() funciona sem erro mesmo sem uso de pipeline."""
+        comp = Comparator.smart(use_cache=True)
+
+        # Usa apenas preprocess=False — cache nunca é populado
+        comp.compare("a", "b", preprocess=False)
+        comp.compare("c", "d", preprocess=False)
+
+        assert len(comp._cache_store) == 0
+
+        # clear_cache() não deve lançar exceção
+        comp.clear_cache()
+        assert len(comp._cache_store) == 0
+
+
+# =====================================================================
+# Fase 4: Benchmarks — preprocess=False deve ser mais rápido
+# =====================================================================
+
+
+class TestPreprocessBenchmarks:
+    """Benchmarks comparando preprocess=True vs preprocess=False.
+
+    Cache é desabilitado para medir o custo real do pipeline a cada chamada,
+    sem que o cache in-memory mascare a diferença.
+    """
+
+    @pytest.fixture()
+    def comp_no_cache(self) -> Comparator:
+        """Comparator sem cache — força execução do pipeline a cada chamada."""
+        return Comparator.basic()
+
+    @pytest.fixture()
+    def sample_candidates(self) -> list:
+        return [
+            "samsung galaxy s22 ultra 256gb",
+            "apple iphone 15 pro max 512gb",
+            "google pixel 8 pro 128gb",
+            "motorola edge 40 neo 256gb",
+            "xiaomi redmi note 13 pro 256gb",
+            "notebook dell inspiron 15 i5",
+            "mouse logitech mx master 3s",
+            "monitor lg ultrawide 34 144hz",
+            "teclado mecanico redragon kumara",
+            "headset hyperx cloud alpha wireless",
+        ]
+
+    def _compare_clearing_cache(
+        self, comp: Comparator, t1: str, t2: str, preprocess: bool
+    ) -> float:
+        """Helper: limpa cache antes de cada compare para forçar pipeline."""
+        comp.clear_cache()
+        return comp.compare(t1, t2, preprocess=preprocess)
+
+    def _batch_clearing_cache(
+        self, comp: Comparator, query: str, candidates: list, preprocess: bool
+    ) -> list:
+        """Helper: limpa cache antes de cada batch para forçar pipeline."""
+        comp.clear_cache()
+        return comp.compare_batch(query, candidates, preprocess=preprocess)
+
+    def test_benchmark_compare_preprocess_true(
+        self, benchmark, comp_no_cache
+    ) -> None:
+        """Benchmark: compare() com preprocess=True (pipeline executado)."""
+        benchmark(
+            self._compare_clearing_cache,
+            comp_no_cache,
+            "galaxy s22 ultra 256gb preto",
+            "galaxy s22 ultra 128gb branco",
+            True,
+        )
+
+    def test_benchmark_compare_preprocess_false(
+        self, benchmark, comp_no_cache
+    ) -> None:
+        """Benchmark: compare() com preprocess=False (bypass direto)."""
+        benchmark(
+            comp_no_cache.compare,
+            "galaxy s22 ultra 256gb preto",
+            "galaxy s22 ultra 128gb branco",
+            preprocess=False,
+        )
+
+    def test_benchmark_batch_preprocess_true(
+        self, benchmark, comp_no_cache, sample_candidates
+    ) -> None:
+        """Benchmark: compare_batch() com preprocess=True (pipeline em lote)."""
+        benchmark(
+            self._batch_clearing_cache,
+            comp_no_cache,
+            "galaxy s22",
+            sample_candidates,
+            True,
+        )
+
+    def test_benchmark_batch_preprocess_false(
+        self, benchmark, comp_no_cache, sample_candidates
+    ) -> None:
+        """Benchmark: compare_batch() com preprocess=False (bypass em lote)."""
+        benchmark(
+            comp_no_cache.compare_batch,
+            "galaxy s22",
+            sample_candidates,
+            preprocess=False,
+        )
+
+    def test_preprocess_false_faster_than_true(self) -> None:
+        """Confirma que preprocess=False é significativamente mais rápido."""
+        import time
+
+        comp = Comparator(mode="basic", use_cache=False)
+
+        text1 = "samsung galaxy s22 ultra 256gb preto novo lacrado"
+        text2 = "samsung galaxy s22 ultra 128gb branco seminovo"
+        n_runs = 200
+
+        # Medir preprocess=True (pipeline completo a cada chamada, sem cache)
+        start = time.perf_counter()
+        for _ in range(n_runs):
+            comp.compare(text1, text2, preprocess=True)
+        time_with = time.perf_counter() - start
+
+        # Medir preprocess=False (bypass direto)
+        start = time.perf_counter()
+        for _ in range(n_runs):
+            comp.compare(text1, text2, preprocess=False)
+        time_without = time.perf_counter() - start
+
+        assert time_without < time_with, (
+            f"preprocess=False ({time_without:.4f}s) deveria ser mais rápido "
+            f"que preprocess=True ({time_with:.4f}s)"
+        )

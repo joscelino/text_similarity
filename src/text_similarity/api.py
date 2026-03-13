@@ -385,7 +385,9 @@ class Comparator:
         p_text2 = self._process(text2, preprocess=preprocess)
         return self.algorithm.compare(p_text1, p_text2)
 
-    def explain(self, text1: str, text2: str, preprocess: bool = True) -> dict[str, Any]:
+    def explain(
+        self, text1: str, text2: str, preprocess: bool = True
+    ) -> dict[str, Any]:
         """Retorna as predições individuais de todos os algoritmos rodados no texto.
 
         Args:
@@ -704,3 +706,115 @@ class Comparator:
                 preprocess=preprocess,
             ),
         )
+
+    # -----------------------------------------------------------------
+    # Re-ranking de resultados de bancos vetoriais
+    # -----------------------------------------------------------------
+
+    def rerank_vector_results(
+        self,
+        query: str,
+        vector_candidates: List[dict[str, Any]],
+        preprocess_query: bool = True,
+        preprocess_candidates: bool = False,
+    ) -> List[dict[str, Any]]:
+        """Re-rankeia resultados de um banco vetorial usando HybridSimilarity.
+
+        Recebe candidatos já retornados por um banco vetorial (Pinecone,
+        Qdrant, Milvus, PGVector, Elasticsearch, etc.) e re-ordena
+        aplicando os algoritmos linguísticos do ``HybridSimilarity``
+        (edição, fonética, entidades), usando o score vetorial original
+        como ``cos_score``.
+
+        Pula completamente o TF-IDF local e o filtro por cosseno — o
+        banco vetorial já fez essa etapa.
+
+        Args:
+            query: Texto de busca do usuário.
+            vector_candidates: Lista de dicionários com os resultados do
+                banco vetorial. Cada dict deve conter ao menos:
+
+                - ``"text"`` (str): Texto do candidato.
+                - ``"score"`` (float): Score de similaridade do banco
+                  (0.0 a 1.0).
+                - ``"id"`` (str, opcional): Identificador do documento.
+
+                Exemplo::
+
+                    [
+                        {"id": "doc1", "text": "Galaxy S22", "score": 0.82},
+                        {"id": "doc2", "text": "iPhone 15", "score": 0.71},
+                    ]
+
+            preprocess_query: Se True, aplica o pipeline na query.
+                Padrão True pois a query geralmente é texto bruto do
+                usuário.
+            preprocess_candidates: Se True, aplica o pipeline nos textos
+                dos candidatos. Padrão False pois textos vindos de
+                bancos vetoriais geralmente já estão normalizados.
+
+        Returns:
+            Lista de dicionários ordenados por score final descendente,
+            contendo ``"id"`` (se presente no input), ``"candidate"``,
+            ``"score"`` (final), ``"vector_score"`` (original do banco)
+            e ``"details"`` (dict por algoritmo).
+
+        Raises:
+            ValueError: Se algum candidato não tiver ``"text"`` ou
+                ``"score"``.
+        """
+        if not vector_candidates:
+            return []
+
+        # Validação do formato de entrada
+        for i, cand in enumerate(vector_candidates):
+            if "text" not in cand:
+                raise ValueError(
+                    f"Candidato na posição {i} não possui o campo 'text'."
+                )
+            if "score" not in cand:
+                raise ValueError(
+                    f"Candidato na posição {i} não possui o campo 'score'."
+                )
+
+        # 1. Pré-processar query e textos dos candidatos
+        p_query = self._process(query, preprocess=preprocess_query)
+        cand_texts = [c["text"] for c in vector_candidates]
+        p_texts = self._process_batch(cand_texts, preprocess=preprocess_candidates)
+
+        # 2. Montar top_candidates no formato esperado por _score_candidates
+        #    O score vetorial do banco é mapeado como cos_score
+        top_candidates: List[dict[str, Any]] = [
+            {
+                "candidate": cand["text"],
+                "p_candidate": p_text,
+                "cos_score": float(cand["score"]),
+            }
+            for cand, p_text in zip(vector_candidates, p_texts)
+        ]
+
+        # 3. Scoring híbrido (reutiliza linear ou RRF conforme configurado)
+        scored = self._score_candidates(p_query, top_candidates)
+
+        # 4. Enriquecer com id e vector_score originais
+        # Mapear candidate text → dados originais para lookup
+        original_map: dict[str, dict[str, Any]] = {
+            c["text"]: c for c in vector_candidates
+        }
+
+        enriched: List[dict[str, Any]] = []
+        for result in scored:
+            original = original_map.get(result["candidate"], {})
+            entry: dict[str, Any] = {}
+
+            if "id" in original:
+                entry["id"] = original["id"]
+
+            entry["candidate"] = result["candidate"]
+            entry["score"] = result["score"]
+            entry["vector_score"] = original.get("score", 0.0)
+            entry["details"] = result["details"]
+
+            enriched.append(entry)
+
+        return enriched

@@ -336,6 +336,52 @@ async def bulk_search(queries: list[str], candidates: list[str]):
 > **Métodos async disponíveis:** `compare_batch_async()` e `compare_many_to_many_async()`. Ambos usam `strategy="parallel"` internamente.
 
 
+### Re-Ranking de Resultados de Bancos Vetoriais
+Quando você já possui resultados de um banco vetorial (Pinecone, Qdrant, Milvus, PGVector, Elasticsearch) e quer **re-ordenar** usando validação linguística PT-BR (edição, fonética, entidades), use o `rerank_vector_results`. Ele funciona como um **Cross-Encoder linguístico brasileiro**, aplicando os algoritmos do `HybridSimilarity` sobre os resultados já filtrados pelo banco.
+
+```python
+from text_similarity.api import Comparator
+
+comp = Comparator.smart(entities=["product_model"])
+
+# Resultados vindos do seu banco vetorial (Qdrant, Pinecone, etc.)
+vector_results = [
+    {"id": "doc1", "text": "Peças industriais variadas", "score": 0.90},
+    {"id": "doc2", "text": "Ferramentas GN série completa", "score": 0.80},
+    {"id": "doc3", "text": "Motor elétrico trifásico", "score": 0.70},
+    {"id": "doc4", "text": "Peças GN500 originais", "score": 0.45},
+]
+
+# Re-rankeia usando validação linguística
+reranked = comp.rerank_vector_results(
+    "GN500",
+    vector_results,
+    preprocess_query=True,        # pipeline na query do usuário
+    preprocess_candidates=True,   # pipeline nos textos (se brutos)
+)
+
+for r in reranked:
+    print(f"Score: {r['score']:.2f} (vetorial: {r['vector_score']:.2f}) | {r['candidate']}")
+# "Peças GN500 originais" sobe da posição #4 para #1 via short-circuit de entidade
+```
+
+O resultado inclui:
+- `id` — identificador do documento (preservado do input, se presente)
+- `candidate` — texto original
+- `score` — score final do HybridSimilarity
+- `vector_score` — score original do banco vetorial
+- `details` — detalhes por algoritmo (cosine, edit, phonetic, entity)
+
+> **Formato de entrada:** Cada candidato deve ter pelo menos `"text"` (str) e `"score"` (float). O campo `"id"` é opcional.
+
+> **Pré-processamento:** Use `preprocess_candidates=False` (padrão) quando os textos do banco já estão normalizados. Use `True` quando os textos são brutos e precisam de limpeza/extração de entidades.
+
+> **Compatível com RRF:** Funciona com `fusion_strategy="rrf"` para combinar rankings por posição:
+> ```python
+> comp = Comparator.smart(entities=["product_model"], fusion_strategy="rrf")
+> reranked = comp.rerank_vector_results("GN500", vector_results)
+> ```
+
 ### Entendendo "Por que" deram Match (Explain)
 Às vezes você precisa debugar a intenção do usuário ou mostrar evidências de que o cruzamento de algoritmos detectou semelhança. Use o `.explain()`:
 

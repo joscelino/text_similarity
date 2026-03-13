@@ -40,7 +40,9 @@ class TestPreprocessBypass:
         comp = Comparator.basic()
         raw = "Comprei UM celular NOVO"
 
-        with patch.object(comp.pipeline, "process", wraps=comp.pipeline.process) as mock:
+        with patch.object(
+            comp.pipeline, "process", wraps=comp.pipeline.process
+        ) as mock:
             comp._process(raw, preprocess=True)
             mock.assert_called_once_with(raw)
 
@@ -144,7 +146,9 @@ class TestBatchPreprocessFalse:
         comp = Comparator.basic()
         candidates = ["galaxy s22"]
 
-        with patch.object(comp.pipeline, "process", wraps=comp.pipeline.process) as mock:
+        with patch.object(
+            comp.pipeline, "process", wraps=comp.pipeline.process
+        ) as mock:
             comp.compare_batch("galaxy s22", candidates)
             assert mock.call_count >= 1
 
@@ -193,8 +197,11 @@ class TestPreprocessFalseTextIntegrity:
 
 
 class TestHybridSimilarityWithCleanStrings:
-    """Valida que todos os algoritmos do HybridSimilarity operam
-    corretamente sobre strings já limpas quando preprocess=False."""
+    """Valida HybridSimilarity com strings já limpas.
+
+    Testa que todos os algoritmos operam corretamente sobre strings
+    já limpas quando preprocess=False.
+    """
 
     def test_smart_mode_all_algorithms_with_clean_text(self) -> None:
         """Smart mode (cosine+edit+phonetic+entity) produz scores válidos."""
@@ -313,7 +320,9 @@ class TestBypassDoesNotEngageDependencies:
                 entity_stage = stage
                 break
 
-        assert entity_stage is not None, "NormalizeEntitiesStage deveria existir no smart"
+        assert entity_stage is not None, (
+            "NormalizeEntitiesStage deveria existir no smart"
+        )
 
         with patch.object(entity_stage, "process") as mock:
             comp.compare(

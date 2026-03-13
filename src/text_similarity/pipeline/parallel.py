@@ -18,8 +18,8 @@ def _worker_process_queries(
         List[str],  # chunk_queries
         List[str],  # candidates (originais)
         List[str],  # p_candidates (pré-processados)
-        Any,  # cand_matrix (scipy sparse — pickle-safe)
-        Any,  # vectorizer (TfidfVectorizer — pickle-safe)
+        Any,  # cand_matrix (scipy sparse — pickle-safe) ou None se BM25
+        Any,  # vectorizer (TfidfVectorizer — pickle-safe) ou None se BM25
         str,  # mode
         Optional[List[str]],  # entities
         Dict[str, float],  # algorithm_weights
@@ -29,12 +29,14 @@ def _worker_process_queries(
         int,  # rrf_k
         Optional[Dict[str, float]],  # rrf_weights
         bool,  # preprocess
+        str,  # indexing_strategy
+        Any,  # bm25_index (BM25Index — pickle-safe) ou None se TF-IDF
     ],
 ) -> List[List[Dict[str, Any]]]:
     """Worker function executada em cada processo filho.
 
     Recria o Comparator localmente e processa um chunk de queries
-    contra a matriz TF-IDF pré-computada dos candidatos.
+    contra o índice pré-computado dos candidatos (TF-IDF ou BM25).
 
     Args:
         args: Tupla com todos os dados necessários para o worker.
@@ -57,11 +59,9 @@ def _worker_process_queries(
         rrf_k,
         rrf_weights,
         preprocess,
+        indexing_strategy,
+        bm25_index,
     ) = args
-
-    from sklearn.metrics.pairwise import (
-        cosine_similarity as sklearn_cosine_similarity,
-    )
 
     from text_similarity.api import Comparator
 
@@ -89,13 +89,22 @@ def _worker_process_queries(
         p_query = comp._process(query, preprocess=preprocess)
 
         try:
-            query_vec = vectorizer.transform([p_query])
-            cosine_scores = sklearn_cosine_similarity(query_vec, cand_matrix)[0]
+            if indexing_strategy == "bm25":
+                cosine_scores = bm25_index.get_scores_normalized(p_query)
+            else:
+                from sklearn.metrics.pairwise import (
+                    cosine_similarity as sklearn_cosine_similarity,
+                )
+
+                query_vec = vectorizer.transform([p_query])
+                cosine_scores = sklearn_cosine_similarity(
+                    query_vec, cand_matrix
+                )[0]
         except ValueError:
             chunk_results.append([])
             continue
 
-        # Filtrar pelo cosseno e pegar top-N
+        # Filtrar pelo score e pegar top-N
         top_candidates = comp._filter_by_cosine(
             candidates, p_candidates, cosine_scores, min_cosine, top_n
         )
@@ -123,19 +132,23 @@ def run_parallel_queries(
     rrf_k: int = 60,
     rrf_weights: Optional[Dict[str, float]] = None,
     preprocess: bool = True,
+    indexing_strategy: str = "tfidf",
+    bm25_index: Any = None,
 ) -> List[List[Dict[str, Any]]]:
     """Orquestra a execução paralela de queries via ProcessPoolExecutor.
 
     Particiona as queries em chunks e distribui entre N processos.
     Cada processo recria internamente o ``Comparator`` e processa
-    seu chunk de queries contra a matriz TF-IDF pré-computada.
+    seu chunk de queries contra o índice pré-computado (TF-IDF ou BM25).
 
     Args:
         queries: Lista completa de queries.
         candidates: Textos originais dos candidatos.
         p_candidates: Textos pré-processados dos candidatos.
         cand_matrix: Matriz TF-IDF esparsa dos candidatos (pickle-safe).
+            None quando ``indexing_strategy="bm25"``.
         vectorizer: TfidfVectorizer já ajustado (pickle-safe).
+            None quando ``indexing_strategy="bm25"``.
         mode: Modo do Comparator ('basic' ou 'smart').
         entities: Lista de entidades ativas (ou None).
         algorithm_weights: Pesos do algoritmo híbrido.
@@ -146,6 +159,9 @@ def run_parallel_queries(
         rrf_k: Constante de suavização do RRF.
         rrf_weights: Pesos por algoritmo para o RRF.
         preprocess: Se False, bypassa o pipeline nos workers.
+        indexing_strategy: ``"tfidf"`` ou ``"bm25"``.
+        bm25_index: Instância de ``BM25Index`` já ajustada (pickle-safe).
+            None quando ``indexing_strategy="tfidf"``.
 
     Returns:
         Lista de listas de resultados — uma para cada query,
@@ -175,6 +191,8 @@ def run_parallel_queries(
                 rrf_k,
                 rrf_weights,
                 preprocess,
+                indexing_strategy,
+                bm25_index,
             )
         )
 
@@ -199,6 +217,8 @@ def run_parallel_queries(
             rrf_k,
             rrf_weights,
             preprocess,
+            indexing_strategy,
+            bm25_index,
         )
         for chunk in chunks
     ]

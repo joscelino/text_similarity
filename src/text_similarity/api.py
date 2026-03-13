@@ -33,6 +33,9 @@ class Comparator:
         fusion_strategy: Literal["linear", "rrf"] = "linear",
         rrf_k: int = 60,
         rrf_weights: dict[str, float] | None = None,
+        indexing_strategy: Literal["tfidf", "bm25"] = "tfidf",
+        bm25_k1: float = 1.2,
+        bm25_b: float = 0.75,
         **kwargs: Any,
     ) -> None:
         """Inicializa a classe Comparator preparando o pipeline.
@@ -50,6 +53,13 @@ class Comparator:
                 ``{"cosine": 0.6, "semantic": 0.4}``). Se ``None``,
                 todos os algoritmos contribuem igualmente.
                 Ignorado quando ``fusion_strategy="linear"``.
+            indexing_strategy: Estratégia de indexação para operações batch.
+                ``"tfidf"`` (padrão) usa TF-IDF + cosseno.
+                ``"bm25"`` usa Okapi BM25 (melhor para textos curtos).
+            bm25_k1: Saturação de term frequency do BM25 (padrão 1.2).
+                Ignorado quando ``indexing_strategy="tfidf"``.
+            bm25_b: Normalização por comprimento do BM25 (padrão 0.75).
+                Ignorado quando ``indexing_strategy="tfidf"``.
             **kwargs: Argumentos arbitrários reservados para extensões futuras.
         """
         self.mode = mode
@@ -58,6 +68,9 @@ class Comparator:
         self.fusion_strategy = fusion_strategy
         self.rrf_k = rrf_k
         self.rrf_weights = rrf_weights
+        self.indexing_strategy = indexing_strategy
+        self.bm25_k1 = bm25_k1
+        self.bm25_b = bm25_b
         self._rrf_fusion: RRFusion | None = (
             RRFusion(k=rrf_k, weights=rrf_weights)
             if fusion_strategy == "rrf"
@@ -127,6 +140,9 @@ class Comparator:
         fusion_strategy: Literal["linear", "rrf"] = "linear",
         rrf_k: int = 60,
         rrf_weights: dict[str, float] | None = None,
+        indexing_strategy: Literal["tfidf", "bm25"] = "tfidf",
+        bm25_k1: float = 1.2,
+        bm25_b: float = 0.75,
     ) -> "Comparator":
         """Instancia um Comparator no modo inteligente.
 
@@ -145,6 +161,10 @@ class Comparator:
             rrf_weights: Pesos por algoritmo para o RRF (ex:
                 ``{"cosine": 0.6, "semantic": 0.4}``). Se ``None``,
                 todos os algoritmos contribuem igualmente.
+            indexing_strategy: ``"tfidf"`` (padrão) ou ``"bm25"``
+                (melhor para textos curtos como produtos).
+            bm25_k1: Saturação de term frequency do BM25 (padrão 1.2).
+            bm25_b: Normalização por comprimento do BM25 (padrão 0.75).
         """
         return cls(
             mode="smart",
@@ -154,6 +174,9 @@ class Comparator:
             fusion_strategy=fusion_strategy,
             rrf_k=rrf_k,
             rrf_weights=rrf_weights,
+            indexing_strategy=indexing_strategy,
+            bm25_k1=bm25_k1,
+            bm25_b=bm25_b,
         )
 
     def _process(self, text: str, preprocess: bool = True) -> str:
@@ -608,18 +631,27 @@ class Comparator:
         if not candidates:
             return [[] for _ in queries]
 
-        from sklearn.feature_extraction.text import TfidfVectorizer
-
         # 1. Pré-processamento em lote dos candidatos (reutiliza cache)
         p_candidates = self._process_batch(candidates, preprocess=preprocess)
 
-        # 2. Ajuste (fit) do vectorizer nos candidatos — UMA ÚNICA VEZ
-        vectorizer = TfidfVectorizer(ngram_range=(1, 2), min_df=1)
-        try:
-            cand_matrix = vectorizer.fit_transform(p_candidates)
-        except ValueError:
-            # Vocabulário vazio — retorna listas vazias para todas as queries
-            return [[] for _ in queries]
+        # 2. Construir índice de acordo com a estratégia de indexação
+        vectorizer = None
+        cand_matrix = None
+        bm25_index = None
+
+        if self.indexing_strategy == "bm25":
+            from text_similarity.core.bm25 import BM25Index
+
+            bm25_index = BM25Index(k1=self.bm25_k1, b=self.bm25_b)
+            bm25_index.fit(p_candidates)
+        else:
+            from sklearn.feature_extraction.text import TfidfVectorizer
+
+            vectorizer = TfidfVectorizer(ngram_range=(1, 2), min_df=1)
+            try:
+                cand_matrix = vectorizer.fit_transform(p_candidates)
+            except ValueError:
+                return [[] for _ in queries]
 
         # 3. Estratégia de execução
         if strategy == "parallel":
@@ -646,26 +678,35 @@ class Comparator:
                 rrf_k=self.rrf_k,
                 rrf_weights=self.rrf_weights,
                 preprocess=preprocess,
+                indexing_strategy=self.indexing_strategy,
+                bm25_index=bm25_index,
             )
 
         # Estratégia sequencial (vectorized)
-        from sklearn.metrics.pairwise import (
-            cosine_similarity as sklearn_cosine_similarity,
-        )
-
         all_results: List[List[dict[str, Any]]] = []
 
         for query in queries:
             p_query = self._process(query, preprocess=preprocess)
 
             try:
-                query_vec = vectorizer.transform([p_query])
-                cosine_scores = sklearn_cosine_similarity(query_vec, cand_matrix)[0]
+                if self.indexing_strategy == "bm25":
+                    assert bm25_index is not None
+                    cosine_scores = bm25_index.get_scores_normalized(p_query)
+                else:
+                    from sklearn.metrics.pairwise import (
+                        cosine_similarity as sklearn_cosine_similarity,
+                    )
+
+                    assert vectorizer is not None
+                    query_vec = vectorizer.transform([p_query])
+                    cosine_scores = sklearn_cosine_similarity(
+                        query_vec, cand_matrix
+                    )[0]
             except ValueError:
                 all_results.append([])
                 continue
 
-            # 4. Filtrar pelo cosseno e pegar top-N
+            # 4. Filtrar pelo score e pegar top-N
             top_candidates = self._filter_by_cosine(
                 candidates, p_candidates, cosine_scores, min_cosine, top_n
             )

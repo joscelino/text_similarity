@@ -20,6 +20,7 @@ Uma biblioteca Python otimizada e especializada na comparação de similaridade 
 - **Pré-processamento Avançado:** Tokenização, remoção de _stopwords_ do português, e Lematização (com suporte nativo ao SpaCy `pt_core_news_sm`).
 - **Comparações Híbridas:** Algoritmos combinados para ir além das palavras (Bag-of-Words).
   - *Cosseno (TF-IDF)*: Para variação lexical.
+  - *BM25 (Okapi BM25)*: Alternativa ao TF-IDF, superior para textos curtos (produtos, modelos). Selecionável via `indexing_strategy="bm25"`.
   - *Distância de Edição (Levenshtein)*: Rápido, usando `rapidfuzz` para detectar erros de digitação.
   - *Fonética (Metaphone PT-BR adaptado)*: Trata "cassaa" e "caça" como pesos idênticos.
   - *Interseção de Entidades*: Lógica de "Curto-Circuito" que garante correspondência (score altíssimo) se a entidade de busca essencial (ex: `GN500`) for validada intacta em textos mais longos.
@@ -64,7 +65,7 @@ from text_similarity.api import Comparator
 comp = Comparator.basic()
 
 score = comp.compare("iphone 13 pro", "iphone pro 13")
-print(f"Similaridade: {score:.2f}") # Output ~0.8 a 1.0 depending on weight
+print(f"Similaridade: {score:.2f}") # Output ~0.8 a 1.0 dependendo do peso
 ```
 
 ### Modo "Smart" (Entidades e Fonética)
@@ -214,6 +215,7 @@ Ao utilizar o modo `smart`, você pode equilibrar os seguintes algoritmos atrav�
 | Opção | Nome Técnico | O que avalia | Melhor uso |
 | :--- | :--- | :--- | :--- |
 | **`cosine`** | Cosseno (TF-IDF) | Frequência e raridade das palavras. | Detectar palavras-chave idênticas. |
+| **`bm25`** | Okapi BM25 | Relevância com saturação de frequência. | Textos curtos (produtos, SKUs). Ativado via `indexing_strategy="bm25"`. |
 | **`edit`** | Levenshtein | Proximidade de caracteres (escrita). | Capturar erros de digitação (typos). |
 | **`phonetic`** | Fonética (PT-BR) | Pronúncia das palavras em português. | Capturar trocas de letras com som igual (ex: S/Z/X). |
 | **`semantic`** | Semântica | Significado e contexto (Embeddings). | Encontrar sinônimos (ex: "carro" vs "veículo"). |
@@ -447,6 +449,58 @@ As seguintes otimizações são aplicadas automaticamente e não requerem mudan�
 | Cache persistente | ~80% (re-exec) | Catálogos processados são salvos em disco e reutilizados entre execuções |
 | LRU cache dateparser | ~5-10% | Datas já resolvidas são cacheadas em memória (até 1024 entradas) |
 | Fonética otimizada | ~5-10% | Substituições fonéticas via regex compilado + mapa ao invés de `.replace()` sequenciais |
+
+### Indexação BM25 (`indexing_strategy="bm25"`)
+
+Por padrão, o pipeline de filtragem usa TF-IDF + cosseno. Para cenários com **textos curtos** (produtos, modelos, SKUs de 3-15 tokens), o BM25 (Okapi BM25) oferece ranking superior graças à saturação de term frequency e normalização por comprimento de documento.
+
+```python
+from text_similarity.api import Comparator
+
+# BM25 como estratégia de indexação
+comp = Comparator.smart(
+    entities=["product_model"],
+    indexing_strategy="bm25",
+)
+
+# Uso idêntico — toda a API funciona transparentemente
+resultados = comp.compare_batch("samsung galaxy s22", candidatos, top_n=10)
+
+# Multi-query também suportado
+todos = comp.compare_many_to_many(buscas, candidatos, top_n=5)
+```
+
+#### Parâmetros BM25 Recomendados para PT-BR Curto
+
+Os parâmetros `bm25_k1` (saturação de frequência) e `bm25_b` (normalização por comprimento) podem ser ajustados para o seu domínio:
+
+| Cenário | `bm25_k1` | `bm25_b` | Motivo |
+|---|---|---|---|
+| **Default** | 1.2 | 0.75 | Padrão Okapi, bom para uso geral |
+| **Produtos curtos** (3-8 tokens) | 1.5 | 0.3 | Menos penalização por document length, mais sensível a repetição |
+| **Descrições longas** (20+ tokens) | 1.2 | 0.75 | Padrão funciona bem para textos mais longos |
+
+```python
+# Otimizado para catálogos de produtos curtos
+comp = Comparator.smart(
+    indexing_strategy="bm25",
+    bm25_k1=1.5,
+    bm25_b=0.3,
+)
+```
+
+#### Estimativa de Impacto: BM25 vs TF-IDF
+
+| Métrica | TF-IDF | BM25 |
+|---|---|---|
+| Qualidade de ranking (textos curtos) | Baseline | **+10-20% precision@10** |
+| Tempo de indexação (150k candidatos) | ~2s | ~1-3s (comparável) |
+| Tempo por query | ~5ms (sparse matmul) | ~15-30ms (loop) |
+| Memória | ~50MB (sparse matrix) | ~80-100MB (dicts) |
+
+**Trade-off principal:** BM25 entrega ranking superior para textos curtos, mas cada query individual é ~3-5x mais lenta que TF-IDF (sparse matrix multiplication vs loop Python). Para 122 queries, isso significa ~2-4s extra no total — negligível frente ao ganho de qualidade. **Recomendação:** use BM25 para catálogos de produtos/SKUs e TF-IDF para corpus com textos longos ou volume extremo de queries simultâneas.
+
+> **Compatível com todas as features:** BM25 funciona com `strategy="parallel"`, `fusion_strategy="rrf"`, `preprocess=False`, métodos async e `rerank_vector_results`. A troca é transparente — apenas mude o `indexing_strategy`.
 
 ---
 

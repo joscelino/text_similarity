@@ -32,14 +32,14 @@ class NumberExtractor(EntityExtractor):
         "mil": 1000,
     }
 
+    _RE_DIGITS = re.compile(r"\b(\d+(?:[\.,]\d+)?)\b", re.IGNORECASE)
+    _RE_WORDS = re.compile(r"\b([a-zA-ZçÇêÊ]+)\b")
+
     def extract(self, text: str) -> list[EntityMatch]:
         """Localiza ocorrências numéricas e converte literais via mapeamento."""
         matches: list[EntityMatch] = []
 
-        # Dígitos numéricos isolados
-        pattern_digits = r"\b(\d+(?:[\.,]\d+)?)\b"
-
-        for m in re.finditer(pattern_digits, text, flags=re.IGNORECASE):
+        for m in self._RE_DIGITS.finditer(text):
             start, end = m.span()
             matched_str = text[start:end]
             val_str = m.group(1).replace(",", ".")
@@ -62,8 +62,7 @@ class NumberExtractor(EntityExtractor):
                 pass
 
         # Numerais escritos
-        text.split()
-        for match_iter in re.finditer(r"\b([a-zA-ZçÇêÊ]+\b)", text):
+        for match_iter in self._RE_WORDS.finditer(text):
             word = match_iter.group(1).lower()
             if word in self.MAP_NUMBERS:
                 start, end = match_iter.span()

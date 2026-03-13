@@ -2,7 +2,9 @@
 
 from __future__ import annotations
 
+import functools
 import re
+from datetime import date
 
 import dateparser
 
@@ -10,28 +12,33 @@ from ..base import EntityExtractor, EntityMatch
 from ..registry import ExtractorRegistry
 
 
+@functools.lru_cache(maxsize=1024)
+def _cached_dateparser_parse(text: str, today: str) -> "str | None":
+    """Cache de chamadas ao dateparser.parse() para evitar reprocessamento."""
+    parsed = dateparser.parse(text, languages=["pt"])
+    return parsed.strftime("%Y-%m-%d") if parsed else None
+
+
 class DateExtractor(EntityExtractor):
     """Extrator de datas utilizando Regex e Dateparser para resolver datas em PT-BR."""
+
+    _PATTERNS = [
+        re.compile(r"\b\d{1,2}[/-]\d{1,2}[/-]\d{2,4}\b", re.IGNORECASE),
+        re.compile(
+            r"\b\d{1,2}\s+de\s+[A-Za-zçÇ]+\s+de\s+\d{2,4}\b", re.IGNORECASE
+        ),
+        re.compile(r"\b(?:amanhã|ontem|hoje)\b", re.IGNORECASE),
+        re.compile(r"\bamanhã\b", re.IGNORECASE),
+    ]
 
     def extract(self, text: str) -> list[EntityMatch]:
         """Aplica regex buscando marcações temporais e as padroniza para ISO."""
         matches: list[EntityMatch] = []
 
-        # Padrões comuns de datas em português
-        patterns = [
-            r"\b\d{1,2}[/-]\d{1,2}[/-]\d{2,4}\b",  # 25/04/2024
-            r"\b\d{1,2}\s+de\s+[A-Za-zçÇ]+\s+de\s+\d{2,4}\b",  # 25 de abril de 2024
-            r"\b(?:amanhã|ontem|hoje)\b",  # relativas (desconsidera acentos)
-        ]
-
-        # Também tentaremos variações em Unicode
-        # r"\bamanhã\b"
-        patterns.append(r"\bamanhã\b")
-
         found_spans = set()
 
-        for pattern in patterns:
-            for m in re.finditer(pattern, text, flags=re.IGNORECASE):
+        for pat in self._PATTERNS:
+            for m in pat.finditer(text):
                 start, end = m.span()
                 matched_str = text[start:end]
 
@@ -39,11 +46,11 @@ class DateExtractor(EntityExtractor):
                 if (start, end) in found_spans:
                     continue
 
-                # Usa o dateparser para resolver a string concreta
-                parsed = dateparser.parse(matched_str, languages=["pt"])
-                if parsed:
+                # Usa o dateparser para resolver a string concreta (com cache)
+                today_str = date.today().isoformat()
+                normalized_val = _cached_dateparser_parse(matched_str, today_str)
+                if normalized_val:
                     found_spans.add((start, end))
-                    normalized_val = parsed.strftime("%Y-%m-%d")
                     matches.append(
                         EntityMatch(
                             entity_type="date",

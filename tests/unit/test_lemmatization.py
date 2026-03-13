@@ -101,12 +101,12 @@ def test_lemmatizer_spacy_lematizes_tokens():
     mock_token = MagicMock()
     mock_token.lemma_ = "correr"
 
-    # Simular o retorno do nlp() que é um objeto doc iterável
+    # Simular o retorno do nlp.pipe() que retorna lista de docs
     mock_doc = MagicMock()
     mock_doc.__iter__ = MagicMock(return_value=iter([mock_token]))
 
     mock_nlp = MagicMock()
-    mock_nlp.return_value = mock_doc
+    mock_nlp.pipe.return_value = [mock_doc]
 
     lem = Lemmatizer()
     lem.backend = "spacy"
@@ -116,11 +116,11 @@ def test_lemmatizer_spacy_lematizes_tokens():
     result = lem.lemmatize(tokens)
 
     assert result == ["correr"]
-    mock_nlp.assert_called_once_with("correndo")
+    mock_nlp.pipe.assert_called_once_with(["correndo"], batch_size=256)
 
 
 def test_lemmatizer_spacy_skips_entity_tags():
-    """Com backend spaCy, tags de entidade não são enviadas ao nlp()."""
+    """Com backend spaCy, tags de entidade não são enviadas ao nlp.pipe()."""
     from text_similarity.preprocessing.lemmatization import Lemmatizer
 
     mock_nlp = MagicMock()
@@ -128,7 +128,7 @@ def test_lemmatizer_spacy_skips_entity_tags():
     mock_token.lemma_ = "produto"
     mock_doc = MagicMock()
     mock_doc.__iter__ = MagicMock(return_value=iter([mock_token]))
-    mock_nlp.return_value = mock_doc
+    mock_nlp.pipe.return_value = [mock_doc]
 
     lem = Lemmatizer()
     lem.backend = "spacy"
@@ -141,8 +141,8 @@ def test_lemmatizer_spacy_skips_entity_tags():
     assert result[0] == "<money:30.0>"
     # Token regular lematizado
     assert result[1] == "produto"
-    # nlp() chamado apenas para "produto"
-    mock_nlp.assert_called_once_with("produto")
+    # nlp.pipe() chamado apenas com tokens regulares
+    mock_nlp.pipe.assert_called_once_with(["produto"], batch_size=256)
 
 
 def test_lemmatizer_spacy_empty_lemmas_fallback():
@@ -153,7 +153,7 @@ def test_lemmatizer_spacy_empty_lemmas_fallback():
     mock_doc.__iter__ = MagicMock(return_value=iter([]))  # Doc sem lemmas
 
     mock_nlp = MagicMock()
-    mock_nlp.return_value = mock_doc
+    mock_nlp.pipe.return_value = [mock_doc]
 
     lem = Lemmatizer()
     lem.backend = "spacy"

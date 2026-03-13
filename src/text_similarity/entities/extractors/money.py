@@ -14,16 +14,16 @@ class MoneyExtractor(EntityExtractor):
     Captura "R$ 30,00", "50 reais", etc.
     """
 
+    _RE_MONEY = re.compile(
+        r"(?:(?:R\$|BRL)\s*([\d\.,]+))|(?:([\d\.,]+)\s+(?:reais|centavos|BRL))",
+        re.IGNORECASE,
+    )
+
     def extract(self, text: str) -> list[EntityMatch]:
         """Aplica regex de montantes buscando números com prefixos monetários."""
         matches: list[EntityMatch] = []
 
-        # Captura toda a cadeia numérica
-        pattern = (
-            r"(?:(?:R\$|BRL)\s*([\d\.,]+))|(?:([\d\.,]+)\s+(?:reais|centavos|BRL))"
-        )
-
-        for m in re.finditer(pattern, text, flags=re.IGNORECASE):
+        for m in self._RE_MONEY.finditer(text):
             start, end = m.span()
             matched_str = text[start:end]
 

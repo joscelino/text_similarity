@@ -20,21 +20,15 @@ class ProductModelExtractor(EntityExtractor):
     "RFX765J9" antes de chegar ao extrator.
     """
 
+    _RE_MODEL = re.compile(
+        r"\b(?:[A-Za-z]+[-]?\d+[A-Za-z\d]*|\d+[-]?[A-Za-z]+[A-Za-z\d]*)\b"
+    )
+
     def extract(self, text: str) -> list[EntityMatch]:
         """Extrai referências técnicas isolando letras contíguas de numerais."""
         matches: list[EntityMatch] = []
 
-        # Padrões para modelos de produtos:
-        # 1. Letras seguidas de números, com ou sem hífen (ex: S22, A-50, 4K, RFX765J9)
-        # 2. Números seguidos de letras (ex: 128GB, 4K, 55pol)
-        # Requer conter ambos letras e números para não casar com
-        # palavras normais ou números puros.
-        pattern = (
-            r"\b(?:[A-Za-z]+[-]?\d+[A-Za-z\d]*|"
-            r"\d+[-]?[A-Za-z]+[A-Za-z\d]*)\b"
-        )
-
-        for m in re.finditer(pattern, text):
+        for m in self._RE_MODEL.finditer(text):
             start, end = m.span()
             matched_str = text[start:end]
 

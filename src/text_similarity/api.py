@@ -156,19 +156,27 @@ class Comparator:
             rrf_weights=rrf_weights,
         )
 
-    def _process(self, text: str) -> str:
+    def _process(self, text: str, preprocess: bool = True) -> str:
         """Pré-processa o texto pelo pipeline, com cache in-memory.
 
         Na primeira chamada para um texto, executa o pipeline completo e
         armazena o resultado. Chamadas subsequentes com o mesmo texto retornam
         o resultado cacheado diretamente.
 
+        Quando ``preprocess=False``, retorna o texto sem alterações,
+        ignorando pipeline e cache. Útil para dados já pré-processados.
+
         Args:
             text: Texto bruto de entrada.
+            preprocess: Se False, bypassa o pipeline e retorna o texto
+                diretamente.
 
         Returns:
             Texto pré-processado como bag of words.
         """
+        if not preprocess:
+            return text
+
         if self.cache is not None:
             key = self.cache.hash_text(text)
             if key in self._cache_store:
@@ -189,20 +197,24 @@ class Comparator:
         if self.cache is not None:
             self.cache.clear()
 
-    def _process_batch(self, texts: List[str]) -> List[str]:
+    def _process_batch(self, texts: List[str], preprocess: bool = True) -> List[str]:
         """Pré-processa uma lista de textos em lote, reutilizando cache.
 
         Cada texto é processado pelo pipeline e armazenado no cache in-memory.
         Textos já processados anteriormente retornam direto do cache,
         evitando reprocessamento redundante.
 
+        Quando ``preprocess=False``, retorna os textos sem alterações.
+
         Args:
             texts: Lista de textos brutos de entrada.
+            preprocess: Se False, bypassa o pipeline e retorna os textos
+                diretamente.
 
         Returns:
             Lista de textos pré-processados como bags of words.
         """
-        return [self._process(text) for text in texts]
+        return [self._process(text, preprocess=preprocess) for text in texts]
 
     def _score_candidates(
         self,
@@ -357,32 +369,35 @@ class Comparator:
         assert self._rrf_fusion is not None
         return self._rrf_fusion.fuse(per_algo_rankings, active_algos)
 
-    def compare(self, text1: str, text2: str) -> float:
+    def compare(self, text1: str, text2: str, preprocess: bool = True) -> float:
         """Compara dois textos e retorna um valor global de similaridade.
 
         Args:
             text1: Primeiro texto para comparação.
             text2: Segundo texto para comparação.
+            preprocess: Se False, bypassa o pipeline de pré-processamento.
+                Útil quando os textos já foram limpos externamente.
 
         Returns:
             Score entre 0.0 (completamente diferentes) e 1.0 (idênticos).
         """
-        p_text1 = self._process(text1)
-        p_text2 = self._process(text2)
+        p_text1 = self._process(text1, preprocess=preprocess)
+        p_text2 = self._process(text2, preprocess=preprocess)
         return self.algorithm.compare(p_text1, p_text2)
 
-    def explain(self, text1: str, text2: str) -> dict[str, Any]:
+    def explain(self, text1: str, text2: str, preprocess: bool = True) -> dict[str, Any]:
         """Retorna as predições individuais de todos os algoritmos rodados no texto.
 
         Args:
             text1: Primeiro texto para comparação.
             text2: Segundo texto para comparação.
+            preprocess: Se False, bypassa o pipeline de pré-processamento.
 
         Returns:
             Dicionário com 'score' (float) e 'details' (dict por algoritmo).
         """
-        p_text1 = self._process(text1)
-        p_text2 = self._process(text2)
+        p_text1 = self._process(text1, preprocess=preprocess)
+        p_text2 = self._process(text2, preprocess=preprocess)
 
         if isinstance(self.algorithm, HybridSimilarity):
             return self.algorithm.explain(p_text1, p_text2)
@@ -432,6 +447,7 @@ class Comparator:
         min_cosine: float = 0.1,
         strategy: Literal["vectorized", "parallel"] = "vectorized",
         n_workers: int | None = None,
+        preprocess: bool = True,
     ) -> List[dict[str, Any]]:
         """Compara um único texto contra uma lista de candidatos em lote.
 
@@ -450,6 +466,8 @@ class Comparator:
                 ``"parallel"`` distribui queries entre múltiplos processos.
             n_workers: Número de processos para ``strategy="parallel"``.
                 Se None, usa ``os.cpu_count()``. Ignorado para ``vectorized``.
+            preprocess: Se False, bypassa o pipeline de pré-processamento.
+                Útil quando os textos já foram limpos externamente.
 
         Returns:
             Lista de dicionários, ordenados do maior score final para o menor,
@@ -472,6 +490,7 @@ class Comparator:
             min_cosine=min_cosine,
             strategy=strategy,
             n_workers=n_workers,
+            preprocess=preprocess,
         )
         return results[0] if results else []
 
@@ -483,6 +502,7 @@ class Comparator:
         min_cosine: float = 0.1,
         strategy: Literal["vectorized", "parallel"] = "vectorized",
         n_workers: int | None = None,
+        preprocess: bool = True,
     ) -> List[List[dict[str, Any]]]:
         """Compara múltiplas queries contra uma lista de candidatos.
 
@@ -512,6 +532,8 @@ class Comparator:
                 ``"parallel"`` distribui queries entre múltiplos processos.
             n_workers: Número de processos para ``strategy="parallel"``.
                 Se None, usa ``os.cpu_count()``. Ignorado para ``vectorized``.
+            preprocess: Se False, bypassa o pipeline de pré-processamento.
+                Útil quando os textos já foram limpos externamente.
 
         Returns:
             Lista de listas de dicionários — uma lista de resultados para
@@ -527,7 +549,7 @@ class Comparator:
         from sklearn.feature_extraction.text import TfidfVectorizer
 
         # 1. Pré-processamento em lote dos candidatos (reutiliza cache)
-        p_candidates = self._process_batch(candidates)
+        p_candidates = self._process_batch(candidates, preprocess=preprocess)
 
         # 2. Ajuste (fit) do vectorizer nos candidatos — UMA ÚNICA VEZ
         vectorizer = TfidfVectorizer(ngram_range=(1, 2), min_df=1)
@@ -561,6 +583,7 @@ class Comparator:
                 fusion_strategy=self.fusion_strategy,
                 rrf_k=self.rrf_k,
                 rrf_weights=self.rrf_weights,
+                preprocess=preprocess,
             )
 
         # Estratégia sequencial (vectorized)
@@ -571,7 +594,7 @@ class Comparator:
         all_results: List[List[dict[str, Any]]] = []
 
         for query in queries:
-            p_query = self._process(query)
+            p_query = self._process(query, preprocess=preprocess)
 
             try:
                 query_vec = vectorizer.transform([p_query])
@@ -598,6 +621,7 @@ class Comparator:
         top_n: int = 50,
         min_cosine: float = 0.1,
         n_workers: int | None = None,
+        preprocess: bool = True,
     ) -> List[dict[str, Any]]:
         """Versão assíncrona de :meth:`compare_batch`.
 
@@ -614,6 +638,7 @@ class Comparator:
             top_n: Número máximo de candidatos filtrados para a etapa final.
             min_cosine: Limiar mínimo de cosseno para descartar ruidosos.
             n_workers: Número de processos. Se None, usa ``os.cpu_count()``.
+            preprocess: Se False, bypassa o pipeline de pré-processamento.
 
         Returns:
             Lista de dicionários, ordenados do maior score final para o menor.
@@ -632,6 +657,7 @@ class Comparator:
                 min_cosine=min_cosine,
                 strategy="parallel",
                 n_workers=n_workers,
+                preprocess=preprocess,
             ),
         )
 
@@ -642,6 +668,7 @@ class Comparator:
         top_n: int = 50,
         min_cosine: float = 0.1,
         n_workers: int | None = None,
+        preprocess: bool = True,
     ) -> List[List[dict[str, Any]]]:
         """Versão assíncrona de :meth:`compare_many_to_many`.
 
@@ -654,6 +681,7 @@ class Comparator:
             top_n: Número máximo de candidatos por query na etapa final.
             min_cosine: Limiar mínimo de cosseno para descartar ruidosos.
             n_workers: Número de processos. Se None, usa ``os.cpu_count()``.
+            preprocess: Se False, bypassa o pipeline de pré-processamento.
 
         Returns:
             Lista de listas de dicionários — uma lista de resultados para
@@ -673,5 +701,6 @@ class Comparator:
                 min_cosine=min_cosine,
                 strategy="parallel",
                 n_workers=n_workers,
+                preprocess=preprocess,
             ),
         )

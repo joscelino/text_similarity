@@ -391,6 +391,54 @@ print(texto_tratado)
 # Saída esperada (bag of words tratado): "limpar texto crz ver promo"
 ```
 
+### Bypass do Pré-processamento (`preprocess=False`)
+Quando seus textos **já foram limpos externamente** (ex: vindos de um pipeline ETL, banco de dados normalizado ou outro sistema de NLP), você pode desativar o pré-processamento para evitar transformações redundantes e ganhar performance:
+
+```python
+from text_similarity.api import Comparator
+comp = Comparator.smart()
+
+# Textos já normalizados pelo seu pipeline externo
+clean1 = "samsung galaxy s22 ultra 256gb"
+clean2 = "samsung galaxy s22 ultra 256gb preto"
+
+# Bypassa limpeza, tokenização, stopwords e lematização
+score = comp.compare(clean1, clean2, preprocess=False)
+print(f"Score: {score:.2f}")
+
+# Também funciona com explain
+detalhes = comp.explain(clean1, clean2, preprocess=False)
+```
+
+Funciona em **todos os métodos** de comparação:
+
+```python
+# Batch — 1 query × N candidatos já limpos
+resultados = comp.compare_batch(
+    "galaxy s22", candidatos_limpos,
+    top_n=10, min_cosine=0.1, preprocess=False,
+)
+
+# Multi-query — M queries × N candidatos já limpos
+todos = comp.compare_many_to_many(
+    queries_limpas, candidatos_limpos,
+    top_n=5, preprocess=False,
+)
+
+# Async
+resultados = await comp.compare_batch_async(
+    "galaxy s22", candidatos_limpos,
+    top_n=10, preprocess=False,
+)
+```
+
+> **Quando usar `preprocess=False`:**
+> - Dados vindos de pipelines ETL que já normalizam texto.
+> - Re-ranking de resultados já processados por outro sistema (ex: Elasticsearch, banco vetorial).
+> - Benchmarks onde você quer isolar o custo dos algoritmos de similaridade sem overhead do pipeline.
+>
+> **Atenção:** Com `preprocess=False`, o cache in-memory **não é utilizado** (não há hash nem armazenamento), e nenhuma etapa do pipeline é executada — incluindo extração de entidades. Certifique-se de que seus textos estão no formato esperado pelos algoritmos.
+
 ---
 
 ## 📈 Calibração de Pesos (Grid Search)

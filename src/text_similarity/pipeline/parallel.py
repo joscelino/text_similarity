@@ -28,6 +28,7 @@ def _worker_process_queries(
         str,  # fusion_strategy
         int,  # rrf_k
         Optional[Dict[str, float]],  # rrf_weights
+        bool,  # preprocess
     ],
 ) -> List[List[Dict[str, Any]]]:
     """Worker function executada em cada processo filho.
@@ -55,6 +56,7 @@ def _worker_process_queries(
         fusion_strategy,
         rrf_k,
         rrf_weights,
+        preprocess,
     ) = args
 
     from sklearn.metrics.pairwise import (
@@ -84,7 +86,7 @@ def _worker_process_queries(
     chunk_results: List[List[Dict[str, Any]]] = []
 
     for query in chunk_queries:
-        p_query = comp._process(query)
+        p_query = comp._process(query, preprocess=preprocess)
 
         try:
             query_vec = vectorizer.transform([p_query])
@@ -120,6 +122,7 @@ def run_parallel_queries(
     fusion_strategy: str = "linear",
     rrf_k: int = 60,
     rrf_weights: Optional[Dict[str, float]] = None,
+    preprocess: bool = True,
 ) -> List[List[Dict[str, Any]]]:
     """Orquestra a execução paralela de queries via ProcessPoolExecutor.
 
@@ -142,6 +145,7 @@ def run_parallel_queries(
         fusion_strategy: Estratégia de fusão (``"linear"`` ou ``"rrf"``).
         rrf_k: Constante de suavização do RRF.
         rrf_weights: Pesos por algoritmo para o RRF.
+        preprocess: Se False, bypassa o pipeline nos workers.
 
     Returns:
         Lista de listas de resultados — uma para cada query,
@@ -170,6 +174,7 @@ def run_parallel_queries(
                 fusion_strategy,
                 rrf_k,
                 rrf_weights,
+                preprocess,
             )
         )
 
@@ -193,6 +198,7 @@ def run_parallel_queries(
             fusion_strategy,
             rrf_k,
             rrf_weights,
+            preprocess,
         )
         for chunk in chunks
     ]

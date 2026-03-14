@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import logging
+import threading
 from typing import Any
 
 from text_similarity.core.base import SimilarityAlgorithm
@@ -14,8 +15,15 @@ logger = logging.getLogger(__name__)
 # Esse padrão garante que workers não tentem serializar o modelo de dezenas/centenas
 # de MB durante a paralelização (multiprocessing) e instanciem localmente o peso ao
 # inicializar.
+#
+# _MODEL_LOCK protege contra race conditions em ambientes multithreaded (ex: FastAPI
+# com run_in_executor usando o ThreadPoolExecutor padrão). O padrão Double-Checked
+# Locking garante que o lock só é adquirido na primeira carga — após isso, o
+# fast-path retorna sem contenção.
 _GLOBAL_MODEL: Any = None
 _CURRENT_MODEL_NAME: str | None = None
+_SENTENCE_UTIL: Any = None
+_MODEL_LOCK = threading.Lock()
 
 
 class SemanticSimilarity(SimilarityAlgorithm):
@@ -47,35 +55,50 @@ class SemanticSimilarity(SimilarityAlgorithm):
         self._model_ref = None
 
     def _ensure_model_loaded(self) -> Any:
-        """Carrega o modelo lazy, armazenando globalmente por processo worker."""
-        global _GLOBAL_MODEL, _CURRENT_MODEL_NAME
+        """Carrega o modelo lazy, armazenando globalmente por processo worker.
 
-        # Fast path
+        Utiliza Double-Checked Locking para garantir thread-safety sem penalizar
+        a performance após a carga inicial: o lock só é adquirido quando o modelo
+        ainda não está disponível.
+        """
+        global _GLOBAL_MODEL, _CURRENT_MODEL_NAME, _SENTENCE_UTIL
+
+        # Fast-path: sem lock — modelo já carregado para este processo/thread
         if _GLOBAL_MODEL is not None and _CURRENT_MODEL_NAME == self.model_name:
             return _GLOBAL_MODEL
 
-        logger.info(f"Carregando e inicializando o modelo semântico: {self.model_name}")
-        try:
-            # Import Local (Lazy Import) para evitar gargalos na biblioteca inteira
-            # para quem depende apenas de Lexical/Phonetic
-            from sentence_transformers import SentenceTransformer
+        with _MODEL_LOCK:
+            # Segundo check dentro do lock: outra thread pode ter carregado
+            # o modelo enquanto esta esperava para adquirir o lock.
+            if _GLOBAL_MODEL is not None and _CURRENT_MODEL_NAME == self.model_name:
+                return _GLOBAL_MODEL
 
-            # Configura um dictionary para passar device apenas se fornecido
-            kwargs = {}
-            if self.device:
-                kwargs["device"] = self.device
+            logger.info(
+                f"Carregando e inicializando o modelo semântico: {self.model_name}"
+            )
+            try:
+                # Import Local (Lazy Import) para evitar gargalos na biblioteca inteira
+                # para quem depende apenas de Lexical/Phonetic
+                from sentence_transformers import SentenceTransformer
+                from sentence_transformers import util as st_util
 
-            _GLOBAL_MODEL = SentenceTransformer(self.model_name, **kwargs)
-            _CURRENT_MODEL_NAME = self.model_name
-            return _GLOBAL_MODEL
+                # Configura um dictionary para passar device apenas se fornecido
+                kwargs = {}
+                if self.device:
+                    kwargs["device"] = self.device
 
-        except ImportError as e:
-            raise ImportError(
-                "A computação Semântica requer a lib `sentence-transformers`. "
-                "Para instalá-la, rode: pip install text_similarity[semantic]"
-            ) from e
-        except Exception as e:
-            raise StageProcessingError("SemanticSimilarity", e) from e
+                _GLOBAL_MODEL = SentenceTransformer(self.model_name, **kwargs)
+                _CURRENT_MODEL_NAME = self.model_name
+                _SENTENCE_UTIL = st_util
+                return _GLOBAL_MODEL
+
+            except ImportError as e:
+                raise ImportError(
+                    "A computação Semântica requer a lib `sentence-transformers`. "
+                    "Para instalá-la, rode: pip install text_similarity[semantic]"
+                ) from e
+            except Exception as e:
+                raise StageProcessingError("SemanticSimilarity", e) from e
 
     def compare(self, text1: str, text2: str) -> float:
         """Gera vetores densos e computa a dissimilaridade do cosseno.
@@ -93,17 +116,16 @@ class SemanticSimilarity(SimilarityAlgorithm):
         model = self._ensure_model_loaded()
 
         try:
-            from sentence_transformers import util
-
             # encode() processa a frase e devolve o tensor Numpy
             # (PyTorch cpu/cuda Tensor).
-            # convert_to_tensor=True garante que util.cos_sim opere em PyTorch nativo.
+            # convert_to_tensor=True garante que _SENTENCE_UTIL.cos_sim opere
+            # em PyTorch nativo.
             emb1 = model.encode(text1, convert_to_tensor=True)
             emb2 = model.encode(text2, convert_to_tensor=True)
 
             # Cosine_Similarity pode retornar tensores bidimensionais de 1x1 nestes
             # casos.
-            cosine_scores = util.cos_sim(emb1, emb2)
+            cosine_scores = _SENTENCE_UTIL.cos_sim(emb1, emb2)
             score = float(cosine_scores[0][0])  # pyright: ignore
 
             # Mantém no bucket da interface Base
@@ -112,3 +134,16 @@ class SemanticSimilarity(SimilarityAlgorithm):
         except Exception as e:
             logger.error(f"Erro ao inferir Similaridade Semântica: {e}")
             return 0.0
+
+    def unload(self) -> None:
+        """Libera o modelo semântico e o módulo util da memória global.
+
+        Útil para liberar RAM/VRAM após uma sessão de inferência intensa,
+        ou antes de trocar para um modelo diferente.
+        """
+        global _GLOBAL_MODEL, _CURRENT_MODEL_NAME, _SENTENCE_UTIL
+        with _MODEL_LOCK:
+            _GLOBAL_MODEL = None
+            _CURRENT_MODEL_NAME = None
+            _SENTENCE_UTIL = None
+        logger.info("Modelo semântico descarregado da memória.")

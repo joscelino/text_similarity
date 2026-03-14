@@ -218,6 +218,19 @@ class Comparator:
         if self.cache is not None:
             self.cache.clear()
 
+    def unload_embeddings_model(self) -> None:
+        """Libera o modelo semântico (sentence-transformers) da memória global.
+
+        Útil para liberar RAM/VRAM após uma sessão de inferência intensa,
+        ou antes de trocar para um modelo diferente. Após a chamada, o modelo
+        será recarregado automaticamente na próxima comparação semântica.
+
+        Não tem efeito se ``use_embeddings=False``.
+        """
+        semantic = self.algorithm.algorithms.get("semantic")
+        if semantic is not None:
+            semantic.unload()
+
     def preprocess_catalog(
         self,
         candidates: List[str],

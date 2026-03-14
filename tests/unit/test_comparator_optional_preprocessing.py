@@ -119,9 +119,7 @@ class TestBatchPreprocessFalse:
         candidates = ["galaxy s22", "iphone 15", "pixel 8"]
 
         with patch.object(comp.pipeline, "process") as mock:
-            results = comp.compare_batch(
-                "galaxy s22", candidates, preprocess=False
-            )
+            results = comp.compare_batch("galaxy s22", candidates, preprocess=False)
             mock.assert_not_called()
 
         assert isinstance(results, list)
@@ -133,9 +131,7 @@ class TestBatchPreprocessFalse:
         candidates = ["galaxy s22 ultra", "iphone 15 pro", "pixel 8"]
 
         with patch.object(comp.pipeline, "process") as mock:
-            results = comp.compare_many_to_many(
-                queries, candidates, preprocess=False
-            )
+            results = comp.compare_many_to_many(queries, candidates, preprocess=False)
             mock.assert_not_called()
 
         assert len(results) == 2
@@ -216,9 +212,7 @@ class TestHybridSimilarityWithCleanStrings:
         assert "details" in result
         # Algoritmos ativos devem estar presentes nos detalhes
         details = result["details"]
-        assert any(
-            key in details for key in ("cosine", "edit", "phonetic", "entity")
-        )
+        assert any(key in details for key in ("cosine", "edit", "phonetic", "entity"))
 
     def test_smart_mode_entity_short_circuit_with_clean_text(self) -> None:
         """Short-circuit de entidade funciona com preprocess=False."""
@@ -393,9 +387,7 @@ class TestPreprocessBenchmarks:
         comp.clear_cache()
         return comp.compare_batch(query, candidates, preprocess=preprocess)
 
-    def test_benchmark_compare_preprocess_true(
-        self, benchmark, comp_no_cache
-    ) -> None:
+    def test_benchmark_compare_preprocess_true(self, benchmark, comp_no_cache) -> None:
         """Benchmark: compare() com preprocess=True (pipeline executado)."""
         benchmark(
             self._compare_clearing_cache,
@@ -405,9 +397,7 @@ class TestPreprocessBenchmarks:
             True,
         )
 
-    def test_benchmark_compare_preprocess_false(
-        self, benchmark, comp_no_cache
-    ) -> None:
+    def test_benchmark_compare_preprocess_false(self, benchmark, comp_no_cache) -> None:
         """Benchmark: compare() com preprocess=False (bypass direto)."""
         benchmark(
             comp_no_cache.compare,

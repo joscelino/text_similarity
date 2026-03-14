@@ -56,9 +56,7 @@ class TestRRFComparatorIntegration:
         explain_rrf = rrf_comp.explain(text1, text2)
         explain_linear = linear_comp.explain(text1, text2)
 
-        assert explain_rrf["score"] == pytest.approx(
-            explain_linear["score"], abs=1e-6
-        )
+        assert explain_rrf["score"] == pytest.approx(explain_linear["score"], abs=1e-6)
 
     def test_compare_batch_rrf_returns_results(self, rrf_comp: Comparator) -> None:
         """compare_batch com RRF deve retornar resultados válidos."""

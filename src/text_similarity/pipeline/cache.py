@@ -50,9 +50,7 @@ class PipelineCache:
             processed: Lista de textos já pré-processados.
             cache_path: Caminho do arquivo de cache em disco.
         """
-        catalog_hash = hashlib.sha256(
-            "\n".join(candidates).encode("utf-8")
-        ).hexdigest()
+        catalog_hash = hashlib.sha256("\n".join(candidates).encode("utf-8")).hexdigest()
         data = {
             "version": "1.0",
             "catalog_hash": catalog_hash,
@@ -76,9 +74,7 @@ class PipelineCache:
         path = Path(cache_path)
         if not path.exists():
             return None
-        catalog_hash = hashlib.sha256(
-            "\n".join(candidates).encode("utf-8")
-        ).hexdigest()
+        catalog_hash = hashlib.sha256("\n".join(candidates).encode("utf-8")).hexdigest()
         try:
             with open(path, "rb") as f:
                 data = pickle.load(f)  # noqa: S301

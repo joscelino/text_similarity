@@ -7,7 +7,6 @@ import pytest
 
 from text_similarity.core.bm25 import BM25Index
 
-
 # --- Testes básicos do BM25Index ---
 
 

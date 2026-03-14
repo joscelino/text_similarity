@@ -97,9 +97,7 @@ def _worker_process_queries(
                 )
 
                 query_vec = vectorizer.transform([p_query])
-                cosine_scores = sklearn_cosine_similarity(
-                    query_vec, cand_matrix
-                )[0]
+                cosine_scores = sklearn_cosine_similarity(query_vec, cand_matrix)[0]
         except ValueError:
             chunk_results.append([])
             continue

@@ -20,14 +20,21 @@ class PhoneticSimilarity(SimilarityAlgorithm):
 
     # Substituições multi-caractere (ordem importa: sorted por len desc)
     _MULTI_CHAR_MAP = {
-        "ss": "s", "rr": "r", "ll": "l",
-        "ce": "se", "ci": "si", "ch": "x",
-        "qu": "k", "ge": "je", "gi": "ji",
-        "lh": "l", "nh": "n",
+        "ss": "s",
+        "rr": "r",
+        "ll": "l",
+        "ce": "se",
+        "ci": "si",
+        "ch": "x",
+        "qu": "k",
+        "ge": "je",
+        "gi": "ji",
+        "lh": "l",
+        "nh": "n",
     }
-    _MULTI_RE = re.compile("|".join(
-        re.escape(k) for k in sorted(_MULTI_CHAR_MAP, key=len, reverse=True)
-    ))
+    _MULTI_RE = re.compile(
+        "|".join(re.escape(k) for k in sorted(_MULTI_CHAR_MAP, key=len, reverse=True))
+    )
     _SINGLE_MAP = {"c": "k", "h": ""}
     _SINGLE_RE = re.compile(r"[ch]")
 
@@ -47,14 +54,10 @@ class PhoneticSimilarity(SimilarityAlgorithm):
         text = text.lower()
 
         # Substituições multi-caractere em uma passada
-        text = self._MULTI_RE.sub(
-            lambda m: self._MULTI_CHAR_MAP[m.group()], text
-        )
+        text = self._MULTI_RE.sub(lambda m: self._MULTI_CHAR_MAP[m.group()], text)
 
         # Substituições single-char (c->k, h->"")
-        text = self._SINGLE_RE.sub(
-            lambda m: self._SINGLE_MAP[m.group()], text
-        )
+        text = self._SINGLE_RE.sub(lambda m: self._SINGLE_MAP[m.group()], text)
 
         # M final -> N (bem -> ben)
         if text.endswith("m"):

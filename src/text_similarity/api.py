@@ -345,6 +345,23 @@ class Comparator:
 
         return self._score_candidates_linear(p_text, top_candidates)
 
+    @property
+    def _reuse_semantic_from_dense(self) -> bool:
+        """Verifica se o score semântico pode ser reutilizado do DenseIndex.
+
+        Verdadeiro quando indexing_strategy="dense" e o modelo do DenseIndex
+        é o mesmo do SemanticSimilarity — evitando recalcular os embeddings
+        da query e dos candidatos que já foram computados na fase de filtragem.
+        """
+        if self.indexing_strategy != "dense":
+            return False
+        if not isinstance(self.algorithm, HybridSimilarity):
+            return False
+        semantic = self.algorithm.algorithms.get("semantic")
+        if semantic is None:
+            return False
+        return self.dense_model_name == getattr(semantic, "model_name", None)
+
     def _score_candidates_linear(
         self,
         p_text: str,
@@ -352,6 +369,7 @@ class Comparator:
     ) -> List[dict[str, Any]]:
         """Scoring via combinação linear ponderada (estratégia padrão)."""
         results: List[dict[str, Any]] = []
+        reuse_semantic = self._reuse_semantic_from_dense
 
         for cand in top_candidates:
             c_p_text = cand["p_candidate"]
@@ -389,7 +407,13 @@ class Comparator:
 
                     for name in ["edit", "phonetic", "semantic"]:
                         if name in alg_weights and alg_weights[name] > 0:
-                            score = algs[name].compare(p_text, c_p_text)
+                            # Reutiliza cos_score do DenseIndex quando o modelo
+                            # semântico é o mesmo — evita recodificar query e
+                            # candidatos que já passaram pelo encoder na filtragem.
+                            if name == "semantic" and reuse_semantic:
+                                score = cos_score
+                            else:
+                                score = algs[name].compare(p_text, c_p_text)
                             details[name] = {
                                 "score": score,
                                 "weight": alg_weights[name],
@@ -449,6 +473,7 @@ class Comparator:
 
         # Montar um ranking por algoritmo
         per_algo_rankings: List[List[dict[str, Any]]] = []
+        reuse_semantic = self._reuse_semantic_from_dense
 
         for algo_name in active_algos:
             ranking: List[dict[str, Any]] = []
@@ -457,6 +482,9 @@ class Comparator:
                 c_p_text = cand["p_candidate"]
 
                 if algo_name == "cosine":
+                    score = cand["cos_score"]
+                elif algo_name == "semantic" and reuse_semantic:
+                    # Reutiliza cos_score do DenseIndex — mesmo modelo, mesmo encoder.
                     score = cand["cos_score"]
                 else:
                     score = algs[algo_name].compare(p_text, c_p_text)
@@ -835,6 +863,163 @@ class Comparator:
                 preprocess=preprocess,
             ),
         )
+
+    # -----------------------------------------------------------------
+    # Re-ranking de resultados de bancos vetoriais
+    # -----------------------------------------------------------------
+
+    def compare_dataframe(
+        self,
+        df: "Any",
+        text_column: str,
+        query: str,
+        top_n: int = 50,
+        min_cosine: float = 0.1,
+        preprocess: bool = True,
+    ) -> "Any":
+        """Compara uma query contra uma coluna de texto de um DataFrame.
+
+        Retorna os top-N candidatos como um novo DataFrame contendo todas as
+        colunas originais mais uma coluna ``score`` com a similaridade final,
+        ordenado do maior para o menor score.
+
+        Args:
+            df: DataFrame pandas com os candidatos.
+            text_column: Nome da coluna de texto para comparar.
+            query: Texto de busca.
+            top_n: Número máximo de resultados.
+            min_cosine: Limiar mínimo de cosseno.
+            preprocess: Se False, bypassa o pré-processamento.
+
+        Returns:
+            DataFrame com as colunas originais + ``score``, ordenado
+            por score.
+
+        Raises:
+            ImportError: Se pandas não estiver instalado.
+        """
+        try:
+            import pandas as pd
+        except ImportError:
+            raise ImportError(
+                "pandas é necessário para compare_dataframe(). "
+                "Instale com: pip install text-similarity-br[dataframe]"
+            )
+
+        candidates = df[text_column].tolist()
+        results = self.compare_batch(
+            query,
+            candidates,
+            top_n=top_n,
+            min_cosine=min_cosine,
+            preprocess=preprocess,
+        )
+
+        rows = []
+        seen: set[int] = set()
+        for r in results:
+            mask = df[text_column] == r["candidate"]
+            idxs = df.index[mask]
+            for idx in idxs:
+                if idx not in seen:
+                    seen.add(idx)
+                    row = df.loc[[idx]].copy()
+                    row["score"] = r["score"]
+                    rows.append(row)
+                    break
+
+        if not rows:
+            result_df = df.iloc[:0].copy()
+            result_df["score"] = pd.Series(dtype="float64")
+            return result_df
+
+        result_df = pd.concat(rows, ignore_index=False)
+        result_df = result_df.sort_values("score", ascending=False).reset_index(
+            drop=True
+        )
+        return result_df
+
+    def record_linkage(
+        self,
+        df_a: "Any",
+        df_b: "Any",
+        col_a: str,
+        col_b: str,
+        top_n: int = 5,
+        min_cosine: float = 0.1,
+        preprocess: bool = True,
+    ) -> "Any":
+        """Cruza dois DataFrames encontrando pares mais similares.
+
+        Para cada linha do ``df_a``, encontra os ``top_n`` candidatos
+        mais similares no ``df_b``, retornando um DataFrame com os
+        pares e scores.
+
+        Args:
+            df_a: DataFrame com as queries (tabela A).
+            df_b: DataFrame com os candidatos (tabela B).
+            col_a: Coluna de texto em df_a.
+            col_b: Coluna de texto em df_b.
+            top_n: Número máximo de matches por query.
+            min_cosine: Limiar mínimo de cosseno.
+            preprocess: Se False, bypassa o pré-processamento.
+
+        Returns:
+            DataFrame com colunas: ``index_a``, ``text_a``,
+            ``index_b``, ``text_b``, ``score``, ``details``.
+
+        Raises:
+            ImportError: Se pandas não estiver instalado.
+        """
+        try:
+            import pandas as pd
+        except ImportError:
+            raise ImportError(
+                "pandas é necessário para record_linkage(). "
+                "Instale com: pip install text-similarity-br[dataframe]"
+            )
+
+        queries = df_a[col_a].tolist()
+        candidates = df_b[col_b].tolist()
+        all_results = self.compare_many_to_many(
+            queries,
+            candidates,
+            top_n=top_n,
+            min_cosine=min_cosine,
+            preprocess=preprocess,
+        )
+
+        records: List[dict[str, Any]] = []
+        for query_idx, matches in enumerate(all_results):
+            text_a = queries[query_idx]
+            for match in matches:
+                cand_idx = candidates.index(match["candidate"])
+                records.append(
+                    {
+                        "index_a": query_idx,
+                        "text_a": text_a,
+                        "index_b": cand_idx,
+                        "text_b": match["candidate"],
+                        "score": match["score"],
+                        "details": match["details"],
+                    }
+                )
+
+        result_df = pd.DataFrame(
+            records,
+            columns=[
+                "index_a",
+                "text_a",
+                "index_b",
+                "text_b",
+                "score",
+                "details",
+            ],
+        )
+        result_df = result_df.sort_values("score", ascending=False).reset_index(
+            drop=True
+        )
+        return result_df
 
     # -----------------------------------------------------------------
     # Re-ranking de resultados de bancos vetoriais

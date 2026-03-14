@@ -60,6 +60,7 @@ pip install "text-similarity-br[nlp]"
 python -m spacy download pt_core_news_sm
 ```
 
+
 ---
 
 ## 📖 Como Usar
@@ -491,22 +492,6 @@ comp = Comparator.smart(
 )
 ```
 
-#### Estimativa de Impacto: TF-IDF vs BM25 vs Dense
-
-| Métrica | TF-IDF | BM25 | Dense |
-|---|---|---|---|
-| Qualidade de ranking (textos curtos) | Baseline | **+10-20% precision@10** | Variável por domínio |
-| Recall semântico (sinônimos) | Baixo | Baixo | **Alto** |
-| Tempo de indexação (150k candidatos) | ~2s | ~1-3s (comparável) | Não recomendado* |
-| Tempo por query | ~5ms (sparse matmul) | ~15-30ms (loop) | ~5-20ms |
-| Memória | ~50MB (sparse matrix) | ~80-100MB (dicts) | ~200-500MB |
-
-*\*Em CPU, o `DenseIndex` leva ~5-10 minutos para indexar 150k candidatos. É adequado apenas para catálogos pequenos/médios (até ~10k itens).*
-
-**Recomendação:** use BM25 para catálogos de produtos/SKUs, TF-IDF para bases de texto longo ou volume extremo de queries, e Dense apenas para catálogos pequenos/médios (até ~10k itens) com alta variação lexical entre query e candidatos.
-
-> **Compatível com todas as features:** as três estratégias funcionam com `strategy="parallel"`, `fusion_strategy="rrf"`, `preprocess=False`, métodos async e `rerank_vector_results`. A troca é transparente — apenas mude o `indexing_strategy`.
-
 ### Indexação Densa (`indexing_strategy="dense"`)
 
 Para cenários onde a query e os candidatos são **semanticamente equivalentes mas não compartilham palavras** (ex: `"veículo flex"` vs `"carro bicombustível"`), o índice denso usa embeddings do `sentence-transformers` como filtro inicial, capturando similaridade semântica antes mesmo do `HybridSimilarity` entrar em ação.
@@ -537,6 +522,148 @@ comp = Comparator.smart(
 > **Quando usar `"dense"`:** Catálogos de até ~10k itens com alta variação lexical — sinônimos, linguagem informal, suporte ao cliente.
 
 > **Compatível com todas as features:** Dense funciona com `strategy="parallel"`, `fusion_strategy="rrf"`, `preprocess=False` e métodos async. A troca é transparente — apenas mude o `indexing_strategy`.
+
+#### Estimativa de Impacto: TF-IDF vs BM25 vs Dense
+
+| Métrica | TF-IDF | BM25 | Dense |
+|---|---|---|---|
+| Qualidade de ranking (textos curtos) | Baseline | **+10-20% precision@10** | Variável por domínio |
+| Recall semântico (sinônimos) | Baixo | Baixo | **Alto** |
+| Tempo de indexação (150k candidatos) | ~2s | ~1-3s (comparável) | Não recomendado* |
+| Tempo por query | ~5ms (sparse matmul) | ~15-30ms (loop) | ~5-20ms |
+| Memória | ~50MB (sparse matrix) | ~80-100MB (dicts) | ~200-500MB |
+
+*\*Em CPU, o `DenseIndex` leva ~5-10 minutos para indexar 150k candidatos. É adequado apenas para catálogos de até ~10k itens.*
+
+**Recomendação:** use BM25 para catálogos de produtos/SKUs, TF-IDF para bases de texto longo ou volume extremo de queries, e Dense apenas para catálogos de até ~10k itens com alta variação lexical entre query e candidatos.
+
+> **Compatível com todas as features:** as três estratégias funcionam com `strategy="parallel"`, `fusion_strategy="rrf"`, `preprocess=False`, métodos async e `rerank_vector_results`. A troca é transparente — apenas mude o `indexing_strategy`.
+
+### Otimização: Evitando Recálculo Semântico com `indexing_strategy="dense"`
+
+Quando `indexing_strategy="dense"` e `use_embeddings=True` são usados simultaneamente **com o mesmo modelo**, a biblioteca detecta automaticamente que os embeddings da query e dos candidatos já foram computados na fase de filtragem pelo `DenseIndex` e **reutiliza o score** na fase híbrida — eliminando o reencoding redundante:
+
+```python
+# O DenseIndex e o SemanticSimilarity usam o mesmo modelo por padrão.
+# Nenhuma configuração adicional é necessária — a otimização é automática.
+comp = Comparator.smart(
+    indexing_strategy="dense",
+    use_embeddings=True,
+)
+
+resultados = comp.compare_batch("veículo flex", candidatos, top_n=10)
+# O encode() do sentence-transformers roda apenas UMA vez por candidato,
+# não duas (filtragem + scoring híbrido).
+```
+
+> **Quando NÃO ocorre:** Se `dense_model_name` for diferente do modelo padrão do `SemanticSimilarity`, os modelos são distintos e o reuso não é aplicado — cada algoritmo usa seu próprio encoder.
+
+---
+
+## 📊 Integração com DataFrames
+
+A biblioteca reconhece automaticamente o tipo de DataFrame usado — **pandas, polars, cuDF, modin** ou qualquer objeto subscritável por nome de coluna. Nenhuma dependência adicional é instalada: os métodos retornam `List[dict]`, e você converte para o DataFrame da sua escolha.
+
+### Busca em DataFrame (`compare_dataframe`)
+
+Compara uma query contra uma coluna de texto e retorna uma `List[dict]` com as linhas mais similares, incluindo todas as chaves originais e uma chave `score`:
+
+```python
+# pandas
+import pandas as pd
+from text_similarity.api import Comparator
+
+comp = Comparator.smart(entities=["product_model"])
+
+catalogo = pd.DataFrame({
+    "sku": ["A001", "A002", "A003", "A004"],
+    "descricao": [
+        "Notebook Dell Inspiron 15 i5",
+        "Mouse Logitech MX Master 3",
+        "Monitor Samsung 27 4K",
+        "Teclado Mecânico Redragon",
+    ],
+    "preco": [3200, 450, 1800, 380],
+})
+
+resultados = comp.compare_dataframe(
+    df=catalogo,
+    text_column="descricao",
+    query="notebook dell inspiron",
+    top_n=3,
+    min_cosine=0.1,
+)
+
+# resultados é List[dict] — converta como quiser
+df_resultado = pd.DataFrame(resultados)
+print(df_resultado[["sku", "descricao", "preco", "score"]])
+```
+
+```python
+# polars (sem nenhuma alteração na chamada)
+import polars as pl
+
+catalogo_pl = pl.DataFrame({
+    "sku": ["A001", "A002", "A003", "A004"],
+    "descricao": [
+        "Notebook Dell Inspiron 15 i5",
+        "Mouse Logitech MX Master 3",
+        "Monitor Samsung 27 4K",
+        "Teclado Mecânico Redragon",
+    ],
+    "preco": [3200, 450, 1800, 380],
+})
+
+resultados = comp.compare_dataframe(catalogo_pl, "descricao", "notebook dell inspiron")
+df_resultado = pl.DataFrame(resultados)
+```
+
+### Cruzamento de Bases (`record_linkage`)
+
+Compara duas tabelas encontrando os pares mais similares — ideal para deduplicação entre fornecedores ou cruzamento de catálogos. Retorna `List[dict]`:
+
+```python
+import pandas as pd
+from text_similarity.api import Comparator
+
+comp = Comparator.smart()
+
+tabela_a = pd.DataFrame({
+    "id_a": [1, 2, 3],
+    "produto_a": ["iPhone 13 Pro 256GB", "Samsung Galaxy S22", "Notebook Dell i5"],
+})
+
+tabela_b = pd.DataFrame({
+    "id_b": [10, 20, 30, 40],
+    "produto_b": [
+        "Apple iPhone 13 Pro",
+        "Galaxy S22 Ultra",
+        "Dell Inspiron 15 i5 8GB",
+        "Mouse sem fio Logitech",
+    ],
+})
+
+pares = comp.record_linkage(
+    df_a=tabela_a,
+    df_b=tabela_b,
+    col_a="produto_a",
+    col_b="produto_b",
+    top_n=2,
+    min_cosine=0.1,
+)
+
+# pares é List[dict] — converta como quiser
+df_pares = pd.DataFrame(pares)
+print(df_pares[["text_a", "text_b", "score"]])
+```
+
+Cada dict contém: `index_a`, `text_a`, `index_b`, `text_b`, `score`, `details`.
+
+> **Quando usar `compare_dataframe` vs `record_linkage`:**
+> - `compare_dataframe` → 1 query × N linhas de um DataFrame (busca de um usuário).
+> - `record_linkage` → M linhas × N linhas (deduplicação entre duas bases, cruzamento de fornecedores).
+
+---
 
 ### Liberando o modelo da memória (`unload_embeddings_model`)
 

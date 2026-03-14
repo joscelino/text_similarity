@@ -868,23 +868,46 @@ class Comparator:
     # Re-ranking de resultados de bancos vetoriais
     # -----------------------------------------------------------------
 
+    @staticmethod
+    def _extract_column(df: Any, col: str) -> List[str]:
+        """Extrai coluna de qualquer DataFrame-like como lista de strings.
+
+        Suporta pandas, polars, cuDF, modin e qualquer objeto
+        subscritável que retorne uma coluna iterável.
+
+        Args:
+            df: DataFrame-like com suporte a subscript por nome de coluna.
+            col: Nome da coluna a extrair.
+
+        Returns:
+            Lista de strings com os valores da coluna.
+
+        """
+        column = df[col]
+        if hasattr(column, "tolist"):  # pandas, cuDF, modin, numpy
+            return column.tolist()  # type: ignore[return-value]
+        if hasattr(column, "to_list"):  # polars, pyarrow
+            return column.to_list()  # type: ignore[return-value]
+        return list(column)  # fallback genérico
+
     def compare_dataframe(
         self,
-        df: "Any",
+        df: Any,
         text_column: str,
         query: str,
         top_n: int = 50,
         min_cosine: float = 0.1,
         preprocess: bool = True,
-    ) -> "Any":
-        """Compara uma query contra uma coluna de texto de um DataFrame.
+    ) -> List[dict[str, Any]]:
+        """Compara uma query contra uma coluna de texto de um DataFrame-like.
 
-        Retorna os top-N candidatos como um novo DataFrame contendo todas as
-        colunas originais mais uma coluna ``score`` com a similaridade final,
-        ordenado do maior para o menor score.
+        Compatível com pandas, polars, cuDF, modin ou qualquer objeto
+        que suporte subscript por nome de coluna.  Retorna uma lista de
+        dicionários — converta para o DataFrame da sua escolha conforme
+        necessário.
 
         Args:
-            df: DataFrame pandas com os candidatos.
+            df: DataFrame-like com os candidatos.
             text_column: Nome da coluna de texto para comparar.
             query: Texto de busca.
             top_n: Número máximo de resultados.
@@ -892,21 +915,11 @@ class Comparator:
             preprocess: Se False, bypassa o pré-processamento.
 
         Returns:
-            DataFrame com as colunas originais + ``score``, ordenado
-            por score.
+            Lista de dicts com as chaves do DataFrame original + ``score``,
+            ordenada do maior para o menor score.
 
-        Raises:
-            ImportError: Se pandas não estiver instalado.
         """
-        try:
-            import pandas as pd
-        except ImportError:
-            raise ImportError(
-                "pandas é necessário para compare_dataframe(). "
-                "Instale com: pip install text-similarity-br[dataframe]"
-            )
-
-        candidates = df[text_column].tolist()
+        candidates = self._extract_column(df, text_column)
         results = self.compare_batch(
             query,
             candidates,
@@ -915,49 +928,59 @@ class Comparator:
             preprocess=preprocess,
         )
 
-        rows = []
-        seen: set[int] = set()
-        for r in results:
-            mask = df[text_column] == r["candidate"]
-            idxs = df.index[mask]
-            for idx in idxs:
-                if idx not in seen:
-                    seen.add(idx)
-                    row = df.loc[[idx]].copy()
-                    row["score"] = r["score"]
-                    rows.append(row)
-                    break
-
-        if not rows:
-            result_df = df.iloc[:0].copy()
-            result_df["score"] = pd.Series(dtype="float64")
-            return result_df
-
-        result_df = pd.concat(rows, ignore_index=False)
-        result_df = result_df.sort_values("score", ascending=False).reset_index(
-            drop=True
+        # Materialize all rows once to avoid repeated column extractions
+        col_names: List[str] = (
+            list(df.columns)
+            if hasattr(df, "columns")
+            else list(df.schema.names())
+            if hasattr(df, "schema")
+            else list(df[0].keys())
+            if hasattr(df, "__len__") and len(df) > 0
+            else [text_column]
         )
-        return result_df
+        rows_by_text: dict[str, List[dict[str, Any]]] = {}
+        for i, text in enumerate(candidates):
+            row: dict[str, Any] = {}
+            for c in col_names:
+                col_vals = self._extract_column(df, c)
+                row[c] = col_vals[i]
+            rows_by_text.setdefault(text, []).append(row)
+
+        output: List[dict[str, Any]] = []
+        seen_texts: set[str] = set()
+        for r in results:
+            text = r["candidate"]
+            if text not in seen_texts and text in rows_by_text:
+                seen_texts.add(text)
+                record = dict(rows_by_text[text][0])
+                record["score"] = r["score"]
+                output.append(record)
+
+        output.sort(key=lambda x: x["score"], reverse=True)
+        return output
 
     def record_linkage(
         self,
-        df_a: "Any",
-        df_b: "Any",
+        df_a: Any,
+        df_b: Any,
         col_a: str,
         col_b: str,
         top_n: int = 5,
         min_cosine: float = 0.1,
         preprocess: bool = True,
-    ) -> "Any":
-        """Cruza dois DataFrames encontrando pares mais similares.
+    ) -> List[dict[str, Any]]:
+        """Cruza dois DataFrames-like encontrando pares mais similares.
+
+        Compatível com pandas, polars, cuDF, modin ou qualquer objeto
+        que suporte subscript por nome de coluna.
 
         Para cada linha do ``df_a``, encontra os ``top_n`` candidatos
-        mais similares no ``df_b``, retornando um DataFrame com os
-        pares e scores.
+        mais similares no ``df_b``, retornando uma lista de dicionários
+        com os pares e scores.
 
         Args:
-            df_a: DataFrame com as queries (tabela A).
-            df_b: DataFrame com os candidatos (tabela B).
+            df_a: DataFrame-like com as queries (tabela A).
+            df_b: DataFrame-like com os candidatos (tabela B).
             col_a: Coluna de texto em df_a.
             col_b: Coluna de texto em df_b.
             top_n: Número máximo de matches por query.
@@ -965,22 +988,13 @@ class Comparator:
             preprocess: Se False, bypassa o pré-processamento.
 
         Returns:
-            DataFrame com colunas: ``index_a``, ``text_a``,
-            ``index_b``, ``text_b``, ``score``, ``details``.
+            Lista de dicts com chaves: ``index_a``, ``text_a``,
+            ``index_b``, ``text_b``, ``score``, ``details``,
+            ordenada do maior para o menor score.
 
-        Raises:
-            ImportError: Se pandas não estiver instalado.
         """
-        try:
-            import pandas as pd
-        except ImportError:
-            raise ImportError(
-                "pandas é necessário para record_linkage(). "
-                "Instale com: pip install text-similarity-br[dataframe]"
-            )
-
-        queries = df_a[col_a].tolist()
-        candidates = df_b[col_b].tolist()
+        queries = self._extract_column(df_a, col_a)
+        candidates = self._extract_column(df_b, col_b)
         all_results = self.compare_many_to_many(
             queries,
             candidates,
@@ -1005,21 +1019,8 @@ class Comparator:
                     }
                 )
 
-        result_df = pd.DataFrame(
-            records,
-            columns=[
-                "index_a",
-                "text_a",
-                "index_b",
-                "text_b",
-                "score",
-                "details",
-            ],
-        )
-        result_df = result_df.sort_values("score", ascending=False).reset_index(
-            drop=True
-        )
-        return result_df
+        records.sort(key=lambda x: x["score"], reverse=True)
+        return records
 
     # -----------------------------------------------------------------
     # Re-ranking de resultados de bancos vetoriais

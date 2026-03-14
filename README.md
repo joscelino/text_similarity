@@ -485,7 +485,7 @@ Os parâmetros `bm25_k1` (saturação de frequência) e `bm25_b` (normalização
 
 | Cenário | `bm25_k1` | `bm25_b` | Motivo |
 |---|---|---|---|
-| **Default** | 1.2 | 0.75 | Padrão Okapi, bom para uso geral |
+| **Padrão** | 1.2 | 0.75 | Padrão Okapi, bom para uso geral |
 | **Produtos curtos** (3-8 tokens) | 1.5 | 0.3 | Menos penalização por document length, mais sensível a repetição |
 | **Descrições longas** (20+ tokens) | 1.2 | 0.75 | Padrão funciona bem para textos mais longos |
 
@@ -507,7 +507,7 @@ comp = Comparator.smart(
 | Tempo por query | ~5ms (sparse matmul) | ~15-30ms (loop) |
 | Memória | ~50MB (sparse matrix) | ~80-100MB (dicts) |
 
-**Trade-off principal:** BM25 entrega ranking superior para textos curtos, mas cada query individual é ~3-5x mais lenta que TF-IDF (sparse matrix multiplication vs loop Python). Para 122 queries, isso significa ~2-4s extra no total — negligível frente ao ganho de qualidade. **Recomendação:** use BM25 para catálogos de produtos/SKUs e TF-IDF para corpus com textos longos ou volume extremo de queries simultâneas.
+**Trade-off principal:** BM25 entrega ranking superior para textos curtos, mas cada query individual é ~3-5x mais lenta que TF-IDF (sparse matrix multiplication vs loop Python). Para 122 queries, isso significa ~2-4s extra no total — negligível frente ao ganho de qualidade. **Recomendação:** use BM25 para catálogos de produtos/SKUs e TF-IDF para bases de texto longo ou volume extremo de queries simultâneas.
 
 > **Compatível com todas as features:** BM25 funciona com `strategy="parallel"`, `fusion_strategy="rrf"`, `preprocess=False`, métodos async e `rerank_vector_results`. A troca é transparente — apenas mude o `indexing_strategy`.
 

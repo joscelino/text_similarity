@@ -480,15 +480,7 @@ resultados = comp.compare_batch("samsung galaxy s22", candidatos, top_n=10)
 todos = comp.compare_many_to_many(buscas, candidatos, top_n=5)
 ```
 
-#### Parâmetros BM25 Recomendados para PT-BR Curto
-
-Os parâmetros `bm25_k1` (saturação de frequência) e `bm25_b` (normalização por comprimento) podem ser ajustados para o seu domínio:
-
-| Cenário | `bm25_k1` | `bm25_b` | Motivo |
-|---|---|---|---|
-| **Padrão** | 1.2 | 0.75 | Padrão Okapi, bom para uso geral |
-| **Produtos curtos** (3-8 tokens) | 1.5 | 0.3 | Menos penalização por document length, mais sensível a repetição |
-| **Descrições longas** (20+ tokens) | 1.2 | 0.75 | Padrão funciona bem para textos mais longos |
+Os parâmetros `bm25_k1` (saturação de frequência) e `bm25_b` (normalização por comprimento) podem ser ajustados para o seu domínio. Para produtos curtos (3-8 tokens), `bm25_k1=1.5` e `bm25_b=0.3` reduzem a penalização por comprimento:
 
 ```python
 # Otimizado para catálogos de produtos curtos
@@ -499,18 +491,21 @@ comp = Comparator.smart(
 )
 ```
 
-#### Estimativa de Impacto: BM25 vs TF-IDF
+#### Estimativa de Impacto: TF-IDF vs BM25 vs Dense
 
-| Métrica | TF-IDF | BM25 |
-|---|---|---|
-| Qualidade de ranking (textos curtos) | Baseline | **+10-20% precision@10** |
-| Tempo de indexação (150k candidatos) | ~2s | ~1-3s (comparável) |
-| Tempo por query | ~5ms (sparse matmul) | ~15-30ms (loop) |
-| Memória | ~50MB (sparse matrix) | ~80-100MB (dicts) |
+| Métrica | TF-IDF | BM25 | Dense |
+|---|---|---|---|
+| Qualidade de ranking (textos curtos) | Baseline | **+10-20% precision@10** | Variável por domínio |
+| Recall semântico (sinônimos) | Baixo | Baixo | **Alto** |
+| Tempo de indexação (150k candidatos) | ~2s | ~1-3s (comparável) | ~30-120s* |
+| Tempo por query | ~5ms (sparse matmul) | ~15-30ms (loop) | ~5-20ms |
+| Memória | ~50MB (sparse matrix) | ~80-100MB (dicts) | ~200-500MB |
 
-**Trade-off principal:** BM25 entrega ranking superior para textos curtos, mas cada query individual é ~3-5x mais lenta que TF-IDF (sparse matrix multiplication vs loop Python). Para 122 queries, isso significa ~2-4s extra no total — negligível frente ao ganho de qualidade. **Recomendação:** use BM25 para catálogos de produtos/SKUs e TF-IDF para bases de texto longo ou volume extremo de queries simultâneas.
+*\*Depende da GPU disponível. Com CUDA, até 10x mais rápido.*
 
-> **Compatível com todas as features:** BM25 funciona com `strategy="parallel"`, `fusion_strategy="rrf"`, `preprocess=False`, métodos async e `rerank_vector_results`. A troca é transparente — apenas mude o `indexing_strategy`.
+**Recomendação:** use BM25 para catálogos de produtos/SKUs, TF-IDF para bases de texto longo ou volume extremo de queries, e Dense quando a variação lexical entre query e candidatos for alta (sinônimos, linguagem informal).
+
+> **Compatível com todas as features:** as três estratégias funcionam com `strategy="parallel"`, `fusion_strategy="rrf"`, `preprocess=False`, métodos async e `rerank_vector_results`. A troca é transparente — apenas mude o `indexing_strategy`.
 
 ### Indexação Densa (`indexing_strategy="dense"`)
 
@@ -536,17 +531,6 @@ comp = Comparator.smart(
     dense_model_name="sentence-transformers/paraphrase-multilingual-mpnet-base-v2",
 )
 ```
-
-#### Estimativa de Impacto: Dense vs TF-IDF vs BM25
-
-| Métrica | TF-IDF | BM25 | Dense |
-|---|---|---|---|
-| Recall semântico (sinônimos) | Baixo | Baixo | **Alto** |
-| Tempo de indexação (150k candidatos) | ~2s | ~1-3s | ~30-120s* |
-| Tempo por query | ~5ms | ~15-30ms | ~5-20ms |
-| Memória | ~50MB | ~80-100MB | ~200-500MB |
-
-*\*Depende da GPU disponível. Com CUDA, até 10x mais rápido.*
 
 > **Quando usar `"dense"`:** Domínios com alta variação lexical — descrições de produtos com sinônimos, textos informais, suporte ao cliente. Para catálogos estáticos, pré-compute com `preprocess_catalog()` e o custo de indexação ocorre apenas uma vez.
 

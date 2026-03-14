@@ -92,8 +92,7 @@ class CalibrationReport:
         if HAS_RICH:
             console = Console()
             msg_hdr = (
-                "\\n[bold red]🚨 Análise de Discrepância "
-                "(Falsos Negativos)[/bold red]"
+                "\\n[bold red]🚨 Análise de Discrepância (Falsos Negativos)[/bold red]"
             )
             console.print(msg_hdr)
             for err in self.worst_errors:

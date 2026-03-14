@@ -72,9 +72,7 @@ class Comparator:
         self.bm25_k1 = bm25_k1
         self.bm25_b = bm25_b
         self._rrf_fusion: RRFusion | None = (
-            RRFusion(k=rrf_k, weights=rrf_weights)
-            if fusion_strategy == "rrf"
-            else None
+            RRFusion(k=rrf_k, weights=rrf_weights) if fusion_strategy == "rrf" else None
         )
 
         # Cache in-memory: hash SHA-256 do texto original → texto pré-processado
@@ -285,9 +283,7 @@ class Comparator:
         if len(texts) > PARALLEL_THRESHOLD:
             from .pipeline.parallel_preprocess import run_parallel_preprocess
 
-            processed = run_parallel_preprocess(
-                texts, self.mode, self._entity_names
-            )
+            processed = run_parallel_preprocess(texts, self.mode, self._entity_names)
         else:
             processed = [self._process(text, preprocess=preprocess) for text in texts]
 
@@ -442,9 +438,7 @@ class Comparator:
                 else:
                     score = algs[algo_name].compare(p_text, c_p_text)
 
-                ranking.append(
-                    {"candidate": cand["candidate"], "score": score}
-                )
+                ranking.append({"candidate": cand["candidate"], "score": score})
 
             ranking.sort(key=lambda x: x["score"], reverse=True)
             per_algo_rankings.append(ranking)
@@ -699,9 +693,7 @@ class Comparator:
 
                     assert vectorizer is not None
                     query_vec = vectorizer.transform([p_query])
-                    cosine_scores = sklearn_cosine_similarity(
-                        query_vec, cand_matrix
-                    )[0]
+                    cosine_scores = sklearn_cosine_similarity(query_vec, cand_matrix)[0]
             except ValueError:
                 all_results.append([])
                 continue
@@ -870,9 +862,7 @@ class Comparator:
         # Validação do formato de entrada
         for i, cand in enumerate(vector_candidates):
             if "text" not in cand:
-                raise ValueError(
-                    f"Candidato na posição {i} não possui o campo 'text'."
-                )
+                raise ValueError(f"Candidato na posição {i} não possui o campo 'text'.")
             if "score" not in cand:
                 raise ValueError(
                     f"Candidato na posição {i} não possui o campo 'score'."

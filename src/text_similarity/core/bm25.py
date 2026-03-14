@@ -29,6 +29,7 @@ class BM25Index:
     """
 
     def __init__(self, k1: float = 1.2, b: float = 0.75) -> None:
+        """Inicializa configurações do algoritmo BM25."""
         self.k1 = k1
         self.b = b
         self._corpus_size: int = 0
@@ -84,9 +85,7 @@ class BM25Index:
             if token not in self._doc_freqs:
                 continue
             df = self._doc_freqs[token]
-            idf = math.log(
-                (self._corpus_size - df + 0.5) / (df + 0.5) + 1.0
-            )
+            idf = math.log((self._corpus_size - df + 0.5) / (df + 0.5) + 1.0)
             for i, tf_dict in enumerate(self._term_freqs):
                 if token not in tf_dict:
                     continue

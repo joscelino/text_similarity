@@ -86,9 +86,9 @@ class TestRRFusionBasic:
         result = rrf.fuse(rankings, ["algo1", "algo2"])
 
         # X: rank 1 em algo1 (1/61) + rank 2 em algo2 (1/62)
-        expected_x = (1 / 61 + 1 / 62)
+        expected_x = 1 / 61 + 1 / 62
         # Y: rank 2 em algo1 (1/62) + rank 1 em algo2 (1/61)
-        expected_y = (1 / 62 + 1 / 61)
+        expected_y = 1 / 62 + 1 / 61
         # Ambos devem ter o mesmo score (simétrico)
         max_rrf = 2 / 61  # 2 algoritmos, rank 1 em ambos
 

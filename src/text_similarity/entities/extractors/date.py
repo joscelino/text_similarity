@@ -24,9 +24,7 @@ class DateExtractor(EntityExtractor):
 
     _PATTERNS = [
         re.compile(r"\b\d{1,2}[/-]\d{1,2}[/-]\d{2,4}\b", re.IGNORECASE),
-        re.compile(
-            r"\b\d{1,2}\s+de\s+[A-Za-zçÇ]+\s+de\s+\d{2,4}\b", re.IGNORECASE
-        ),
+        re.compile(r"\b\d{1,2}\s+de\s+[A-Za-zçÇ]+\s+de\s+\d{2,4}\b", re.IGNORECASE),
         re.compile(r"\b(?:amanhã|ontem|hoje)\b", re.IGNORECASE),
         re.compile(r"\bamanhã\b", re.IGNORECASE),
     ]

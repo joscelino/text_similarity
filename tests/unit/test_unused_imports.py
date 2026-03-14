@@ -19,7 +19,7 @@ def test_unused_imports():
         [ruff_cmd, "check", ".", "--select", "F401"],
         capture_output=True,
         text=True,
-        encoding="utf-8"
+        encoding="utf-8",
     )
 
     # Se o exit code for diferente de 0, significa que foram encontradas violações

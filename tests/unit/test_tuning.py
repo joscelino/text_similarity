@@ -1,6 +1,5 @@
 """Testes unitários para a ferramenta de Dashboard de Calibração."""
 
-
 from text_similarity.api import Comparator
 from text_similarity.tuning.calibrator import WeightCalibrator
 
@@ -57,13 +56,17 @@ def test_calibrator_correct_f1_score():
     # Levenshtein pega erros pequenos ("casa" vs "caza").
     # Cosseno é burro para isso ("casa" vs "caza" -> 0.0)
     gs = [
-        {"query": "casa", "target": "caza", "match": True}, # Esperamos que cfg1 (match)
-        {"query": "celular", "target": "cel", "match": False}, # Todos perdem
-        {"query": "teste", "target": "teste", "match": True}, # Todos ganham
+        {
+            "query": "casa",
+            "target": "caza",
+            "match": True,
+        },  # Esperamos que cfg1 (match)
+        {"query": "celular", "target": "cel", "match": False},  # Todos perdem
+        {"query": "teste", "target": "teste", "match": True},  # Todos ganham
     ]
 
     configs = [
-        {"edit": 1.0},    # Vai encontrar casa vs caza
+        {"edit": 1.0},  # Vai encontrar casa vs caza
         {"cosine": 1.0},  # Vai falhar em casa vs caza (retorna 0 TFIDF match)
     ]
 

@@ -35,9 +35,7 @@ class WeightCalibrator:
         self.configurations = configurations
         self.match_threshold = match_threshold
 
-    def evaluate(
-        self, gold_standard: List[Dict[str, Any]]
-    ) -> CalibrationReport:
+    def evaluate(self, gold_standard: List[Dict[str, Any]]) -> CalibrationReport:
         """Executa a calibração iterativa garantindo o pré-processamento único.
 
         Args:
@@ -115,7 +113,7 @@ class WeightCalibrator:
                             "target": t_raw,
                             "predicted_score": score,
                             "expected_match": True,
-                            "explain": explain_data
+                            "explain": explain_data,
                         }
                     )
                 else:

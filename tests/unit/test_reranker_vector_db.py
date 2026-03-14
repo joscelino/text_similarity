@@ -79,13 +79,9 @@ class TestRerankInputValidation:
 class TestRerankOutputFormat:
     """Valida o formato de saída do re-ranking."""
 
-    def test_output_contains_required_fields(
-        self, comp_smart, vector_results
-    ) -> None:
+    def test_output_contains_required_fields(self, comp_smart, vector_results) -> None:
         """Resultado deve conter id, candidate, score, vector_score, details."""
-        results = comp_smart.rerank_vector_results(
-            "Samsung Galaxy S22", vector_results
-        )
+        results = comp_smart.rerank_vector_results("Samsung Galaxy S22", vector_results)
 
         assert len(results) > 0
         first = results[0]
@@ -97,22 +93,16 @@ class TestRerankOutputFormat:
 
     def test_vector_score_preserved(self, comp_smart, vector_results) -> None:
         """O score original do banco vetorial é preservado em vector_score."""
-        results = comp_smart.rerank_vector_results(
-            "Samsung Galaxy S22", vector_results
-        )
+        results = comp_smart.rerank_vector_results("Samsung Galaxy S22", vector_results)
 
         # Mapear por candidate text para localizar
         by_text = {r["candidate"]: r for r in results}
         assert by_text["Samsung Galaxy S22 Ultra 256GB"]["vector_score"] == 0.92
         assert by_text["Apple iPhone 15 Pro Max 512GB"]["vector_score"] == 0.85
 
-    def test_results_sorted_by_final_score(
-        self, comp_smart, vector_results
-    ) -> None:
+    def test_results_sorted_by_final_score(self, comp_smart, vector_results) -> None:
         """Resultados devem estar ordenados por score final descendente."""
-        results = comp_smart.rerank_vector_results(
-            "Samsung Galaxy S22", vector_results
-        )
+        results = comp_smart.rerank_vector_results("Samsung Galaxy S22", vector_results)
 
         scores = [r["score"] for r in results]
         assert scores == sorted(scores, reverse=True)
@@ -200,9 +190,7 @@ class TestRerankPreprocessing:
             # Pipeline chamado pelo menos 1x (para a query)
             assert mock.call_count >= 1
 
-    def test_preprocess_candidates_false_skips_pipeline(
-        self, comp_smart
-    ) -> None:
+    def test_preprocess_candidates_false_skips_pipeline(self, comp_smart) -> None:
         """preprocess_candidates=False não executa pipeline nos candidatos."""
         vector_candidates = [
             {"id": "doc1", "text": "galaxy s22", "score": 0.8},

@@ -629,6 +629,10 @@ report.summary()
 
 Para habilitar a visualização rica (rich terminal dashboard):
 ```bash
+# Com uv
+uv add "text-similarity-br[tuning]"
+
+# Com pip
 pip install "text-similarity-br[tuning]"
 ```
 

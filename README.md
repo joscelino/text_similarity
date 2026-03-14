@@ -497,13 +497,13 @@ comp = Comparator.smart(
 |---|---|---|---|
 | Qualidade de ranking (textos curtos) | Baseline | **+10-20% precision@10** | Variável por domínio |
 | Recall semântico (sinônimos) | Baixo | Baixo | **Alto** |
-| Tempo de indexação (150k candidatos) | ~2s | ~1-3s (comparável) | ~30-120s* |
+| Tempo de indexação (150k candidatos) | ~2s | ~1-3s (comparável) | Não recomendado* |
 | Tempo por query | ~5ms (sparse matmul) | ~15-30ms (loop) | ~5-20ms |
 | Memória | ~50MB (sparse matrix) | ~80-100MB (dicts) | ~200-500MB |
 
-*\*Depende da GPU disponível. Com CUDA, até 10x mais rápido.*
+*\*Em CPU, o `DenseIndex` leva ~5-10 minutos para indexar 150k candidatos. É adequado apenas para catálogos pequenos/médios (até ~10k itens).*
 
-**Recomendação:** use BM25 para catálogos de produtos/SKUs, TF-IDF para bases de texto longo ou volume extremo de queries, e Dense quando a variação lexical entre query e candidatos for alta (sinônimos, linguagem informal).
+**Recomendação:** use BM25 para catálogos de produtos/SKUs, TF-IDF para bases de texto longo ou volume extremo de queries, e Dense apenas para catálogos pequenos/médios (até ~10k itens) com alta variação lexical entre query e candidatos.
 
 > **Compatível com todas as features:** as três estratégias funcionam com `strategy="parallel"`, `fusion_strategy="rrf"`, `preprocess=False`, métodos async e `rerank_vector_results`. A troca é transparente — apenas mude o `indexing_strategy`.
 
@@ -532,7 +532,9 @@ comp = Comparator.smart(
 )
 ```
 
-> **Quando usar `"dense"`:** Domínios com alta variação lexical — descrições de produtos com sinônimos, textos informais, suporte ao cliente. Para catálogos estáticos, pré-compute com `preprocess_catalog()` e o custo de indexação ocorre apenas uma vez.
+> **⚠️ Limitação importante:** O `DenseIndex` roda em CPU e leva ~5-10 minutos para indexar 150k documentos. **Use apenas para catálogos pequenos/médios (até ~10k itens).** Para grandes volumes com recall semântico, use `rerank_vector_results` combinado com um banco vetorial externo (Qdrant, Pinecone, etc.).
+
+> **Quando usar `"dense"`:** Catálogos de até ~10k itens com alta variação lexical — sinônimos, linguagem informal, suporte ao cliente.
 
 > **Compatível com todas as features:** Dense funciona com `strategy="parallel"`, `fusion_strategy="rrf"`, `preprocess=False` e métodos async. A troca é transparente — apenas mude o `indexing_strategy`.
 

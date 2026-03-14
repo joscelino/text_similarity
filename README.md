@@ -480,15 +480,7 @@ resultados = comp.compare_batch("samsung galaxy s22", candidatos, top_n=10)
 todos = comp.compare_many_to_many(buscas, candidatos, top_n=5)
 ```
 
-#### Parâmetros BM25 Recomendados para PT-BR Curto
-
-Os parâmetros `bm25_k1` (saturação de frequência) e `bm25_b` (normalização por comprimento) podem ser ajustados para o seu domínio:
-
-| Cenário | `bm25_k1` | `bm25_b` | Motivo |
-|---|---|---|---|
-| **Padrão** | 1.2 | 0.75 | Padrão Okapi, bom para uso geral |
-| **Produtos curtos** (3-8 tokens) | 1.5 | 0.3 | Menos penalização por document length, mais sensível a repetição |
-| **Descrições longas** (20+ tokens) | 1.2 | 0.75 | Padrão funciona bem para textos mais longos |
+Os parâmetros `bm25_k1` (saturação de frequência) e `bm25_b` (normalização por comprimento) podem ser ajustados para o seu domínio. Para produtos curtos (3-8 tokens), `bm25_k1=1.5` e `bm25_b=0.3` reduzem a penalização por comprimento:
 
 ```python
 # Otimizado para catálogos de produtos curtos

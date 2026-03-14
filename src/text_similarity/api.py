@@ -345,6 +345,23 @@ class Comparator:
 
         return self._score_candidates_linear(p_text, top_candidates)
 
+    @property
+    def _reuse_semantic_from_dense(self) -> bool:
+        """Verifica se o score semântico pode ser reutilizado do DenseIndex.
+
+        Verdadeiro quando indexing_strategy="dense" e o modelo do DenseIndex
+        é o mesmo do SemanticSimilarity — evitando recalcular os embeddings
+        da query e dos candidatos que já foram computados na fase de filtragem.
+        """
+        if self.indexing_strategy != "dense":
+            return False
+        if not isinstance(self.algorithm, HybridSimilarity):
+            return False
+        semantic = self.algorithm.algorithms.get("semantic")
+        if semantic is None:
+            return False
+        return self.dense_model_name == getattr(semantic, "model_name", None)
+
     def _score_candidates_linear(
         self,
         p_text: str,
@@ -352,6 +369,7 @@ class Comparator:
     ) -> List[dict[str, Any]]:
         """Scoring via combinação linear ponderada (estratégia padrão)."""
         results: List[dict[str, Any]] = []
+        reuse_semantic = self._reuse_semantic_from_dense
 
         for cand in top_candidates:
             c_p_text = cand["p_candidate"]
@@ -389,7 +407,13 @@ class Comparator:
 
                     for name in ["edit", "phonetic", "semantic"]:
                         if name in alg_weights and alg_weights[name] > 0:
-                            score = algs[name].compare(p_text, c_p_text)
+                            # Reutiliza cos_score do DenseIndex quando o modelo
+                            # semântico é o mesmo — evita recodificar query e
+                            # candidatos que já passaram pelo encoder na filtragem.
+                            if name == "semantic" and reuse_semantic:
+                                score = cos_score
+                            else:
+                                score = algs[name].compare(p_text, c_p_text)
                             details[name] = {
                                 "score": score,
                                 "weight": alg_weights[name],
@@ -449,6 +473,7 @@ class Comparator:
 
         # Montar um ranking por algoritmo
         per_algo_rankings: List[List[dict[str, Any]]] = []
+        reuse_semantic = self._reuse_semantic_from_dense
 
         for algo_name in active_algos:
             ranking: List[dict[str, Any]] = []
@@ -457,6 +482,9 @@ class Comparator:
                 c_p_text = cand["p_candidate"]
 
                 if algo_name == "cosine":
+                    score = cand["cos_score"]
+                elif algo_name == "semantic" and reuse_semantic:
+                    # Reutiliza cos_score do DenseIndex — mesmo modelo, mesmo encoder.
                     score = cand["cos_score"]
                 else:
                     score = algs[algo_name].compare(p_text, c_p_text)
@@ -835,6 +863,164 @@ class Comparator:
                 preprocess=preprocess,
             ),
         )
+
+    # -----------------------------------------------------------------
+    # Re-ranking de resultados de bancos vetoriais
+    # -----------------------------------------------------------------
+
+    @staticmethod
+    def _extract_column(df: Any, col: str) -> List[str]:
+        """Extrai coluna de qualquer DataFrame-like como lista de strings.
+
+        Suporta pandas, polars, cuDF, modin e qualquer objeto
+        subscritável que retorne uma coluna iterável.
+
+        Args:
+            df: DataFrame-like com suporte a subscript por nome de coluna.
+            col: Nome da coluna a extrair.
+
+        Returns:
+            Lista de strings com os valores da coluna.
+
+        """
+        column = df[col]
+        if hasattr(column, "tolist"):  # pandas, cuDF, modin, numpy
+            return column.tolist()  # type: ignore[return-value]
+        if hasattr(column, "to_list"):  # polars, pyarrow
+            return column.to_list()  # type: ignore[return-value]
+        return list(column)  # fallback genérico
+
+    def compare_dataframe(
+        self,
+        df: Any,
+        text_column: str,
+        query: str,
+        top_n: int = 50,
+        min_cosine: float = 0.1,
+        preprocess: bool = True,
+    ) -> List[dict[str, Any]]:
+        """Compara uma query contra uma coluna de texto de um DataFrame-like.
+
+        Compatível com pandas, polars, cuDF, modin ou qualquer objeto
+        que suporte subscript por nome de coluna.  Retorna uma lista de
+        dicionários — converta para o DataFrame da sua escolha conforme
+        necessário.
+
+        Args:
+            df: DataFrame-like com os candidatos.
+            text_column: Nome da coluna de texto para comparar.
+            query: Texto de busca.
+            top_n: Número máximo de resultados.
+            min_cosine: Limiar mínimo de cosseno.
+            preprocess: Se False, bypassa o pré-processamento.
+
+        Returns:
+            Lista de dicts com as chaves do DataFrame original + ``score``,
+            ordenada do maior para o menor score.
+
+        """
+        candidates = self._extract_column(df, text_column)
+        results = self.compare_batch(
+            query,
+            candidates,
+            top_n=top_n,
+            min_cosine=min_cosine,
+            preprocess=preprocess,
+        )
+
+        # Materialize all rows once to avoid repeated column extractions
+        col_names: List[str] = (
+            list(df.columns)
+            if hasattr(df, "columns")
+            else list(df.schema.names())
+            if hasattr(df, "schema")
+            else list(df[0].keys())
+            if hasattr(df, "__len__") and len(df) > 0
+            else [text_column]
+        )
+        rows_by_text: dict[str, List[dict[str, Any]]] = {}
+        for i, text in enumerate(candidates):
+            row: dict[str, Any] = {}
+            for c in col_names:
+                col_vals = self._extract_column(df, c)
+                row[c] = col_vals[i]
+            rows_by_text.setdefault(text, []).append(row)
+
+        output: List[dict[str, Any]] = []
+        seen_texts: set[str] = set()
+        for r in results:
+            text = r["candidate"]
+            if text not in seen_texts and text in rows_by_text:
+                seen_texts.add(text)
+                record = dict(rows_by_text[text][0])
+                record["score"] = r["score"]
+                output.append(record)
+
+        output.sort(key=lambda x: x["score"], reverse=True)
+        return output
+
+    def record_linkage(
+        self,
+        df_a: Any,
+        df_b: Any,
+        col_a: str,
+        col_b: str,
+        top_n: int = 5,
+        min_cosine: float = 0.1,
+        preprocess: bool = True,
+    ) -> List[dict[str, Any]]:
+        """Cruza dois DataFrames-like encontrando pares mais similares.
+
+        Compatível com pandas, polars, cuDF, modin ou qualquer objeto
+        que suporte subscript por nome de coluna.
+
+        Para cada linha do ``df_a``, encontra os ``top_n`` candidatos
+        mais similares no ``df_b``, retornando uma lista de dicionários
+        com os pares e scores.
+
+        Args:
+            df_a: DataFrame-like com as queries (tabela A).
+            df_b: DataFrame-like com os candidatos (tabela B).
+            col_a: Coluna de texto em df_a.
+            col_b: Coluna de texto em df_b.
+            top_n: Número máximo de matches por query.
+            min_cosine: Limiar mínimo de cosseno.
+            preprocess: Se False, bypassa o pré-processamento.
+
+        Returns:
+            Lista de dicts com chaves: ``index_a``, ``text_a``,
+            ``index_b``, ``text_b``, ``score``, ``details``,
+            ordenada do maior para o menor score.
+
+        """
+        queries = self._extract_column(df_a, col_a)
+        candidates = self._extract_column(df_b, col_b)
+        all_results = self.compare_many_to_many(
+            queries,
+            candidates,
+            top_n=top_n,
+            min_cosine=min_cosine,
+            preprocess=preprocess,
+        )
+
+        records: List[dict[str, Any]] = []
+        for query_idx, matches in enumerate(all_results):
+            text_a = queries[query_idx]
+            for match in matches:
+                cand_idx = candidates.index(match["candidate"])
+                records.append(
+                    {
+                        "index_a": query_idx,
+                        "text_a": text_a,
+                        "index_b": cand_idx,
+                        "text_b": match["candidate"],
+                        "score": match["score"],
+                        "details": match["details"],
+                    }
+                )
+
+        records.sort(key=lambda x: x["score"], reverse=True)
+        return records
 
     # -----------------------------------------------------------------
     # Re-ranking de resultados de bancos vetoriais

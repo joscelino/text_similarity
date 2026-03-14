@@ -28,7 +28,7 @@ def test_should_export_exceptions() -> None:
 
 def test_should_expose_version() -> None:
     assert hasattr(text_similarity, "__version__")
-    assert text_similarity.__version__ == "0.6.0"
+    assert text_similarity.__version__ == "0.7.0"
 
 
 def test_all_exports_are_importable() -> None:

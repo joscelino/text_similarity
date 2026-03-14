@@ -21,6 +21,7 @@ Uma biblioteca Python otimizada e especializada na comparação de similaridade 
 - **Comparações Híbridas:** Algoritmos combinados para ir além das palavras (Bag-of-Words).
   - *Cosseno (TF-IDF)*: Para variação lexical.
   - *BM25 (Okapi BM25)*: Alternativa ao TF-IDF, superior para textos curtos (produtos, modelos). Selecionável via `indexing_strategy="bm25"`.
+  - *Índice Denso (sentence-transformers)*: Filtro inicial por similaridade semântica densa, capturando sinônimos sem sobreposição lexical. Selecionável via `indexing_strategy="dense"`.
   - *Distância de Edição (Levenshtein)*: Rápido, usando `rapidfuzz` para detectar erros de digitação.
   - *Fonética (Metaphone PT-BR adaptado)*: Trata "cassaa" e "caça" como pesos idênticos.
   - *Interseção de Entidades*: Lógica de "Curto-Circuito" que garante correspondência (score altíssimo) se a entidade de busca essencial (ex: `GN500`) for validada intacta em textos mais longos.
@@ -510,6 +511,61 @@ comp = Comparator.smart(
 **Trade-off principal:** BM25 entrega ranking superior para textos curtos, mas cada query individual é ~3-5x mais lenta que TF-IDF (sparse matrix multiplication vs loop Python). Para 122 queries, isso significa ~2-4s extra no total — negligível frente ao ganho de qualidade. **Recomendação:** use BM25 para catálogos de produtos/SKUs e TF-IDF para bases de texto longo ou volume extremo de queries simultâneas.
 
 > **Compatível com todas as features:** BM25 funciona com `strategy="parallel"`, `fusion_strategy="rrf"`, `preprocess=False`, métodos async e `rerank_vector_results`. A troca é transparente — apenas mude o `indexing_strategy`.
+
+### Indexação Densa (`indexing_strategy="dense"`)
+
+Para cenários onde a query e os candidatos são **semanticamente equivalentes mas não compartilham palavras** (ex: `"veículo flex"` vs `"carro bicombustível"`), o índice denso usa embeddings do `sentence-transformers` como filtro inicial, capturando similaridade semântica antes mesmo do `HybridSimilarity` entrar em ação.
+
+```python
+from text_similarity.api import Comparator
+
+# Índice denso — resolve o gap de recall de sinônimos
+comp = Comparator.smart(
+    indexing_strategy="dense",
+)
+
+# Candidato será encontrado mesmo sem sobreposição lexical
+resultados = comp.compare_batch("veículo flex", candidatos, top_n=10)
+```
+
+Por padrão utiliza o modelo `paraphrase-multilingual-MiniLM-L12-v2` (multilingual, inclui PT-BR). Para usar outro modelo:
+
+```python
+comp = Comparator.smart(
+    indexing_strategy="dense",
+    dense_model_name="sentence-transformers/paraphrase-multilingual-mpnet-base-v2",
+)
+```
+
+#### Estimativa de Impacto: Dense vs TF-IDF vs BM25
+
+| Métrica | TF-IDF | BM25 | Dense |
+|---|---|---|---|
+| Recall semântico (sinônimos) | Baixo | Baixo | **Alto** |
+| Tempo de indexação (150k candidatos) | ~2s | ~1-3s | ~30-120s* |
+| Tempo por query | ~5ms | ~15-30ms | ~5-20ms |
+| Memória | ~50MB | ~80-100MB | ~200-500MB |
+
+*\*Depende da GPU disponível. Com CUDA, até 10x mais rápido.*
+
+> **Quando usar `"dense"`:** Domínios com alta variação lexical — descrições de produtos com sinônimos, textos informais, suporte ao cliente. Para catálogos estáticos, pré-compute com `preprocess_catalog()` e o custo de indexação ocorre apenas uma vez.
+
+> **Compatível com todas as features:** Dense funciona com `strategy="parallel"`, `fusion_strategy="rrf"`, `preprocess=False` e métodos async. A troca é transparente — apenas mude o `indexing_strategy`.
+
+### Liberando o modelo da memória (`unload_embeddings_model`)
+
+Após uma sessão de inferência intensa, você pode liberar o modelo semântico da RAM/VRAM:
+
+```python
+comp = Comparator.smart(use_embeddings=True)
+
+# ... processamento ...
+
+# Libera o modelo da memória global
+comp.unload_embeddings_model()
+
+# O modelo será recarregado automaticamente na próxima comparação semântica
+```
 
 ---
 

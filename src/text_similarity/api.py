@@ -33,9 +33,10 @@ class Comparator:
         fusion_strategy: Literal["linear", "rrf"] = "linear",
         rrf_k: int = 60,
         rrf_weights: dict[str, float] | None = None,
-        indexing_strategy: Literal["tfidf", "bm25"] = "tfidf",
+        indexing_strategy: Literal["tfidf", "bm25", "dense"] = "tfidf",
         bm25_k1: float = 1.2,
         bm25_b: float = 0.75,
+        dense_model_name: str = ("paraphrase-multilingual-MiniLM-L12-v2"),
         **kwargs: Any,
     ) -> None:
         """Inicializa a classe Comparator preparando o pipeline.
@@ -56,10 +57,13 @@ class Comparator:
             indexing_strategy: Estratégia de indexação para operações batch.
                 ``"tfidf"`` (padrão) usa TF-IDF + cosseno.
                 ``"bm25"`` usa Okapi BM25 (melhor para textos curtos).
+                ``"dense"`` usa embeddings densos (sentence-transformers).
             bm25_k1: Saturação de term frequency do BM25 (padrão 1.2).
                 Ignorado quando ``indexing_strategy="tfidf"``.
             bm25_b: Normalização por comprimento do BM25 (padrão 0.75).
                 Ignorado quando ``indexing_strategy="tfidf"``.
+            dense_model_name: Nome do modelo sentence-transformers.
+                Ignorado quando ``indexing_strategy`` não é ``"dense"``.
             **kwargs: Argumentos arbitrários reservados para extensões futuras.
         """
         self.mode = mode
@@ -71,6 +75,7 @@ class Comparator:
         self.indexing_strategy = indexing_strategy
         self.bm25_k1 = bm25_k1
         self.bm25_b = bm25_b
+        self.dense_model_name = dense_model_name
         self._rrf_fusion: RRFusion | None = (
             RRFusion(k=rrf_k, weights=rrf_weights) if fusion_strategy == "rrf" else None
         )
@@ -138,9 +143,10 @@ class Comparator:
         fusion_strategy: Literal["linear", "rrf"] = "linear",
         rrf_k: int = 60,
         rrf_weights: dict[str, float] | None = None,
-        indexing_strategy: Literal["tfidf", "bm25"] = "tfidf",
+        indexing_strategy: Literal["tfidf", "bm25", "dense"] = "tfidf",
         bm25_k1: float = 1.2,
         bm25_b: float = 0.75,
+        dense_model_name: str = ("paraphrase-multilingual-MiniLM-L12-v2"),
     ) -> "Comparator":
         """Instancia um Comparator no modo inteligente.
 
@@ -159,10 +165,13 @@ class Comparator:
             rrf_weights: Pesos por algoritmo para o RRF (ex:
                 ``{"cosine": 0.6, "semantic": 0.4}``). Se ``None``,
                 todos os algoritmos contribuem igualmente.
-            indexing_strategy: ``"tfidf"`` (padrão) ou ``"bm25"``
-                (melhor para textos curtos como produtos).
+            indexing_strategy: ``"tfidf"`` (padrão), ``"bm25"``
+                (melhor para textos curtos) ou ``"dense"``
+                (embeddings semânticos).
             bm25_k1: Saturação de term frequency do BM25 (padrão 1.2).
             bm25_b: Normalização por comprimento do BM25 (padrão 0.75).
+            dense_model_name: Nome do modelo sentence-transformers
+                para ``indexing_strategy="dense"``.
         """
         return cls(
             mode="smart",
@@ -175,6 +184,7 @@ class Comparator:
             indexing_strategy=indexing_strategy,
             bm25_k1=bm25_k1,
             bm25_b=bm25_b,
+            dense_model_name=dense_model_name,
         )
 
     def _process(self, text: str, preprocess: bool = True) -> str:
@@ -217,6 +227,19 @@ class Comparator:
         self._cache_store.clear()
         if self.cache is not None:
             self.cache.clear()
+
+    def unload_embeddings_model(self) -> None:
+        """Libera o modelo semântico (sentence-transformers) da memória global.
+
+        Útil para liberar RAM/VRAM após uma sessão de inferência intensa,
+        ou antes de trocar para um modelo diferente. Após a chamada, o modelo
+        será recarregado automaticamente na próxima comparação semântica.
+
+        Não tem efeito se ``use_embeddings=False``.
+        """
+        semantic = self.algorithm.algorithms.get("semantic")
+        if semantic is not None:
+            semantic.unload()
 
     def preprocess_catalog(
         self,
@@ -632,14 +655,22 @@ class Comparator:
         vectorizer = None
         cand_matrix = None
         bm25_index = None
+        dense_index = None
 
-        if self.indexing_strategy == "bm25":
+        if self.indexing_strategy == "dense":
+            from text_similarity.core.dense import DenseIndex
+
+            dense_index = DenseIndex(model_name=self.dense_model_name)
+            dense_index.fit(p_candidates)
+        elif self.indexing_strategy == "bm25":
             from text_similarity.core.bm25 import BM25Index
 
             bm25_index = BM25Index(k1=self.bm25_k1, b=self.bm25_b)
             bm25_index.fit(p_candidates)
         else:
-            from sklearn.feature_extraction.text import TfidfVectorizer
+            from sklearn.feature_extraction.text import (
+                TfidfVectorizer,
+            )
 
             vectorizer = TfidfVectorizer(ngram_range=(1, 2), min_df=1)
             try:
@@ -674,6 +705,8 @@ class Comparator:
                 preprocess=preprocess,
                 indexing_strategy=self.indexing_strategy,
                 bm25_index=bm25_index,
+                dense_index=dense_index,
+                dense_model_name=self.dense_model_name,
             )
 
         # Estratégia sequencial (vectorized)
@@ -683,7 +716,10 @@ class Comparator:
             p_query = self._process(query, preprocess=preprocess)
 
             try:
-                if self.indexing_strategy == "bm25":
+                if self.indexing_strategy == "dense":
+                    assert dense_index is not None
+                    cosine_scores = dense_index.get_scores_normalized(p_query)
+                elif self.indexing_strategy == "bm25":
                     assert bm25_index is not None
                     cosine_scores = bm25_index.get_scores_normalized(p_query)
                 else:

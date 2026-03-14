@@ -9,7 +9,7 @@
 
 Uma biblioteca Python otimizada e especializada na comparação de similaridade de textos em português brasileiro (PT-BR). Ideal para sistemas de NLP, chatbots, análise de sentimento e cruzamento de dados onde as peculiaridades do idioma, formatação de dinheiro, fonética regional e medidas influenciam a real intenção e semelhança dos textos.
 
-## Recursos Principais
+## ✨ Recursos Principais
 
 - **Limpeza Especializada (TextCleaner):** Expansão de contrações modernas ("vc" -> "você", "fds" -> "fim de semana") e tratamento de acentos focado no nosso idioma.
 - **Detecção de Entidades (EntityNormalizer):** Extração e preservação inteligente de grandezas antes da "limpeza bruta" que as destruiria. (Ex: converte `R$ 30,00` para a tag única `<money:30.0>`).
@@ -325,7 +325,7 @@ Para **web servers assíncronos**, use os métodos `_async` que offloadam o trab
 
 ```python
 from fastapi import FastAPI
-from text_similarity import Comparator
+from text_similarity.api import Comparator
 
 app = FastAPI()
 comp = Comparator.smart()
@@ -415,7 +415,7 @@ print(detalhes["details"])
 
 > **`compare_batch()` com lista vazia:** `comp.compare_batch("qualquer", [])` retorna `[]` imediatamente, sem processamento.
 
-## Performance para Alto Volume
+## ⚡ Performance para Alto Volume
 
 A biblioteca foi otimizada para cenários de alto volume (100+ queries x 100k+ candidatos) com múltiplas técnicas que reduzem significativamente o tempo de processamento.
 
@@ -711,10 +711,33 @@ Extratores disponíveis por padrão:
 | `product_model` | `S22 Ultra`, `iPhone 13`, `XJ-900` |
 
 
-## Contribuindo
-Padrões de Qualidade seguidos rigorosamente: `Ruff` (Lint+Format) e `MyPy` (Tipoção Forte).
-Para garantir suas alterações, digite:
+## 🤝 Contribuindo
+
+Padrões de qualidade seguidos rigorosamente: `Ruff` (lint + format) e `MyPy` (tipagem forte).
+
+### Fluxo de Trabalho
+
+- **Branch de desenvolvimento:** `dev` — todo desenvolvimento acontece aqui
+- Crie branches de feature a partir de `dev` e abra PRs de volta para `dev`
+- Merges para `main` são feitos apenas em releases
+
+### Antes de Abrir um PR
+
 ```bash
+# Lint e formatação
 uv run ruff check src tests
+uv run ruff format src tests
+
+# Tipagem
+uv run mypy src
+
+# Testes
 uv run pytest tests/
 ```
+
+### Reportando Bugs / Sugestões
+
+Abra uma [issue no GitHub](https://github.com/joscelino/text_similarity/issues) descrevendo:
+- Versão da biblioteca (`pip show text-similarity-br`)
+- Versão do Python
+- Exemplo mínimo reproduzível

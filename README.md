@@ -38,6 +38,10 @@ Uma biblioteca Python otimizada e especializada na comparação de similaridade 
 ## 🚀 Instalação
 
 ```bash
+# Com uv (recomendado)
+uv add text-similarity-br
+
+# Com pip
 pip install text-similarity-br
 ```
 
@@ -46,6 +50,11 @@ A partir da versão 0.4.0, o pacote já inclui `sentence-transformers` como depe
 Com suporte a lematização via SpaCy (opcional):
 
 ```bash
+# Com uv
+uv add "text-similarity-br[nlp]"
+uv run python -m spacy download pt_core_news_sm
+
+# Com pip
 pip install "text-similarity-br[nlp]"
 python -m spacy download pt_core_news_sm
 ```

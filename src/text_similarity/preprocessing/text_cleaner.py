@@ -13,6 +13,10 @@ class TextCleaner:
     e expansão de contrações básicas.
     """
 
+    _RE_CONTROL = re.compile(r"\\r\\n|\\rn|\\r|\\n|\\t|\r\n|\r|\n|\t")
+    _RE_NON_ALNUM = re.compile(r"[^a-z0-9\s$<>\-:\.]")
+    _RE_MULTI_SPACE = re.compile(r"\s+")
+
     # Principais contrações do português para expansão
     CONTRACOES = {
         " do ": " de o ",
@@ -53,7 +57,7 @@ class TextCleaner:
         # Primeira higienização rigorosa: remover retornos, quebras de linha e tabs.
         # Captura as versões de caracteres de controle (\r, \n, \t) e também
         # strings strings literais formadas por mal escape (ex: '\\rn', '\\n')
-        text = re.sub(r"\\r\\n|\\rn|\\r|\\n|\\t|\r\n|\r|\n|\t", " ", text)
+        text = self._RE_CONTROL.sub(" ", text)
 
         text = text.lower()
 
@@ -80,9 +84,9 @@ class TextCleaner:
             # Cuidado para não matar as marcações de entidade do tipo <money:10>
             # Vamos manter alfanuméricos, espaços, hífens,
             # pontos (decimais) e < > : (usados pelas entidades)
-            text = re.sub(r"[^a-z0-9\s$<>\-:\.]", "", text)
+            text = self._RE_NON_ALNUM.sub("", text)
 
         # Remover espaços duplicados
-        text = re.sub(r"\s+", " ", text).strip()
+        text = self._RE_MULTI_SPACE.sub(" ", text).strip()
 
         return text

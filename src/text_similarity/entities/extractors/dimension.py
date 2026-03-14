@@ -11,14 +11,15 @@ from ..registry import ExtractorRegistry
 class DimensionExtractor(EntityExtractor):
     """Extrator de dimensões físicas (kg, mg, m, cm, l, ml, etc)."""
 
+    _RE_DIM = re.compile(
+        r"(\d+(?:[\.,]\d+)?)\s*(kg|g|mg|m|cm|mm|l|ml)\b", re.IGNORECASE
+    )
+
     def extract(self, text: str) -> list[EntityMatch]:
         """Varre o texto com regex buscando medidas associadas a unidades."""
         matches: list[EntityMatch] = []
 
-        # Ex: "2kg", "1.5m", "30 cm"
-        pattern = r"(\d+(?:[\.,]\d+)?)\s*(kg|g|mg|m|cm|mm|l|ml)\b"
-
-        for m in re.finditer(pattern, text, flags=re.IGNORECASE):
+        for m in self._RE_DIM.finditer(text):
             start, end = m.span()
             matched_str = text[start:end]
 

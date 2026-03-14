@@ -33,6 +33,9 @@ class Comparator:
         fusion_strategy: Literal["linear", "rrf"] = "linear",
         rrf_k: int = 60,
         rrf_weights: dict[str, float] | None = None,
+        indexing_strategy: Literal["tfidf", "bm25"] = "tfidf",
+        bm25_k1: float = 1.2,
+        bm25_b: float = 0.75,
         **kwargs: Any,
     ) -> None:
         """Inicializa a classe Comparator preparando o pipeline.
@@ -50,6 +53,13 @@ class Comparator:
                 ``{"cosine": 0.6, "semantic": 0.4}``). Se ``None``,
                 todos os algoritmos contribuem igualmente.
                 Ignorado quando ``fusion_strategy="linear"``.
+            indexing_strategy: Estratégia de indexação para operações batch.
+                ``"tfidf"`` (padrão) usa TF-IDF + cosseno.
+                ``"bm25"`` usa Okapi BM25 (melhor para textos curtos).
+            bm25_k1: Saturação de term frequency do BM25 (padrão 1.2).
+                Ignorado quando ``indexing_strategy="tfidf"``.
+            bm25_b: Normalização por comprimento do BM25 (padrão 0.75).
+                Ignorado quando ``indexing_strategy="tfidf"``.
             **kwargs: Argumentos arbitrários reservados para extensões futuras.
         """
         self.mode = mode
@@ -58,6 +68,9 @@ class Comparator:
         self.fusion_strategy = fusion_strategy
         self.rrf_k = rrf_k
         self.rrf_weights = rrf_weights
+        self.indexing_strategy = indexing_strategy
+        self.bm25_k1 = bm25_k1
+        self.bm25_b = bm25_b
         self._rrf_fusion: RRFusion | None = (
             RRFusion(k=rrf_k, weights=rrf_weights)
             if fusion_strategy == "rrf"
@@ -127,6 +140,9 @@ class Comparator:
         fusion_strategy: Literal["linear", "rrf"] = "linear",
         rrf_k: int = 60,
         rrf_weights: dict[str, float] | None = None,
+        indexing_strategy: Literal["tfidf", "bm25"] = "tfidf",
+        bm25_k1: float = 1.2,
+        bm25_b: float = 0.75,
     ) -> "Comparator":
         """Instancia um Comparator no modo inteligente.
 
@@ -145,6 +161,10 @@ class Comparator:
             rrf_weights: Pesos por algoritmo para o RRF (ex:
                 ``{"cosine": 0.6, "semantic": 0.4}``). Se ``None``,
                 todos os algoritmos contribuem igualmente.
+            indexing_strategy: ``"tfidf"`` (padrão) ou ``"bm25"``
+                (melhor para textos curtos como produtos).
+            bm25_k1: Saturação de term frequency do BM25 (padrão 1.2).
+            bm25_b: Normalização por comprimento do BM25 (padrão 0.75).
         """
         return cls(
             mode="smart",
@@ -154,21 +174,32 @@ class Comparator:
             fusion_strategy=fusion_strategy,
             rrf_k=rrf_k,
             rrf_weights=rrf_weights,
+            indexing_strategy=indexing_strategy,
+            bm25_k1=bm25_k1,
+            bm25_b=bm25_b,
         )
 
-    def _process(self, text: str) -> str:
+    def _process(self, text: str, preprocess: bool = True) -> str:
         """Pré-processa o texto pelo pipeline, com cache in-memory.
 
         Na primeira chamada para um texto, executa o pipeline completo e
         armazena o resultado. Chamadas subsequentes com o mesmo texto retornam
         o resultado cacheado diretamente.
 
+        Quando ``preprocess=False``, retorna o texto sem alterações,
+        ignorando pipeline e cache. Útil para dados já pré-processados.
+
         Args:
             text: Texto bruto de entrada.
+            preprocess: Se False, bypassa o pipeline e retorna o texto
+                diretamente.
 
         Returns:
             Texto pré-processado como bag of words.
         """
+        if not preprocess:
+            return text
+
         if self.cache is not None:
             key = self.cache.hash_text(text)
             if key in self._cache_store:
@@ -189,20 +220,84 @@ class Comparator:
         if self.cache is not None:
             self.cache.clear()
 
-    def _process_batch(self, texts: List[str]) -> List[str]:
+    def preprocess_catalog(
+        self,
+        candidates: List[str],
+        cache_path: str = "catalog_cache.pkl",
+    ) -> List[str]:
+        """Pré-processa candidatos e salva em disco para reuso.
+
+        Na primeira execução, processa todos os candidatos e salva o
+        resultado em ``cache_path``. Em execuções subsequentes com o
+        mesmo catálogo, carrega direto do disco (~80% economia de tempo).
+
+        A invalidação é automática via hash SHA-256 do conteúdo: se o
+        catálogo mudar, o cache é reprocessado.
+
+        Args:
+            candidates: Lista de textos candidatos.
+            cache_path: Caminho do arquivo de cache em disco.
+
+        Returns:
+            Lista de textos pré-processados.
+        """
+        if self.cache is not None:
+            loaded = self.cache.load_catalog(candidates, cache_path)
+            if loaded is not None:
+                return loaded
+
+        processed = self._process_batch(candidates, preprocess=True)
+
+        if self.cache is not None:
+            self.cache.save_catalog(candidates, processed, cache_path)
+
+        return processed
+
+    @property
+    def _entity_names(self) -> "list[str] | None":
+        """Retorna a lista de entidades configuradas."""
+        return self.entities
+
+    def _process_batch(self, texts: List[str], preprocess: bool = True) -> List[str]:
         """Pré-processa uma lista de textos em lote, reutilizando cache.
 
         Cada texto é processado pelo pipeline e armazenado no cache in-memory.
         Textos já processados anteriormente retornam direto do cache,
         evitando reprocessamento redundante.
 
+        Para lotes grandes (>1000 textos), distribui o trabalho entre
+        múltiplos processos via ``parallel_preprocess``.
+
+        Quando ``preprocess=False``, retorna os textos sem alterações.
+
         Args:
             texts: Lista de textos brutos de entrada.
+            preprocess: Se False, bypassa o pipeline e retorna os textos
+                diretamente.
 
         Returns:
             Lista de textos pré-processados como bags of words.
         """
-        return [self._process(text) for text in texts]
+        if not preprocess:
+            return list(texts)
+
+        PARALLEL_THRESHOLD = 1000
+        if len(texts) > PARALLEL_THRESHOLD:
+            from .pipeline.parallel_preprocess import run_parallel_preprocess
+
+            processed = run_parallel_preprocess(
+                texts, self.mode, self._entity_names
+            )
+        else:
+            processed = [self._process(text, preprocess=preprocess) for text in texts]
+
+        # Atualizar cache in-memory com resultados do processamento paralelo
+        if self.cache is not None:
+            for text, p_text in zip(texts, processed):
+                key = self.cache.hash_text(text)
+                self._cache_store[key] = p_text
+
+        return processed
 
     def _score_candidates(
         self,
@@ -357,32 +452,37 @@ class Comparator:
         assert self._rrf_fusion is not None
         return self._rrf_fusion.fuse(per_algo_rankings, active_algos)
 
-    def compare(self, text1: str, text2: str) -> float:
+    def compare(self, text1: str, text2: str, preprocess: bool = True) -> float:
         """Compara dois textos e retorna um valor global de similaridade.
 
         Args:
             text1: Primeiro texto para comparação.
             text2: Segundo texto para comparação.
+            preprocess: Se False, bypassa o pipeline de pré-processamento.
+                Útil quando os textos já foram limpos externamente.
 
         Returns:
             Score entre 0.0 (completamente diferentes) e 1.0 (idênticos).
         """
-        p_text1 = self._process(text1)
-        p_text2 = self._process(text2)
+        p_text1 = self._process(text1, preprocess=preprocess)
+        p_text2 = self._process(text2, preprocess=preprocess)
         return self.algorithm.compare(p_text1, p_text2)
 
-    def explain(self, text1: str, text2: str) -> dict[str, Any]:
+    def explain(
+        self, text1: str, text2: str, preprocess: bool = True
+    ) -> dict[str, Any]:
         """Retorna as predições individuais de todos os algoritmos rodados no texto.
 
         Args:
             text1: Primeiro texto para comparação.
             text2: Segundo texto para comparação.
+            preprocess: Se False, bypassa o pipeline de pré-processamento.
 
         Returns:
             Dicionário com 'score' (float) e 'details' (dict por algoritmo).
         """
-        p_text1 = self._process(text1)
-        p_text2 = self._process(text2)
+        p_text1 = self._process(text1, preprocess=preprocess)
+        p_text2 = self._process(text2, preprocess=preprocess)
 
         if isinstance(self.algorithm, HybridSimilarity):
             return self.algorithm.explain(p_text1, p_text2)
@@ -432,6 +532,7 @@ class Comparator:
         min_cosine: float = 0.1,
         strategy: Literal["vectorized", "parallel"] = "vectorized",
         n_workers: int | None = None,
+        preprocess: bool = True,
     ) -> List[dict[str, Any]]:
         """Compara um único texto contra uma lista de candidatos em lote.
 
@@ -450,6 +551,8 @@ class Comparator:
                 ``"parallel"`` distribui queries entre múltiplos processos.
             n_workers: Número de processos para ``strategy="parallel"``.
                 Se None, usa ``os.cpu_count()``. Ignorado para ``vectorized``.
+            preprocess: Se False, bypassa o pipeline de pré-processamento.
+                Útil quando os textos já foram limpos externamente.
 
         Returns:
             Lista de dicionários, ordenados do maior score final para o menor,
@@ -472,6 +575,7 @@ class Comparator:
             min_cosine=min_cosine,
             strategy=strategy,
             n_workers=n_workers,
+            preprocess=preprocess,
         )
         return results[0] if results else []
 
@@ -483,6 +587,7 @@ class Comparator:
         min_cosine: float = 0.1,
         strategy: Literal["vectorized", "parallel"] = "vectorized",
         n_workers: int | None = None,
+        preprocess: bool = True,
     ) -> List[List[dict[str, Any]]]:
         """Compara múltiplas queries contra uma lista de candidatos.
 
@@ -512,6 +617,8 @@ class Comparator:
                 ``"parallel"`` distribui queries entre múltiplos processos.
             n_workers: Número de processos para ``strategy="parallel"``.
                 Se None, usa ``os.cpu_count()``. Ignorado para ``vectorized``.
+            preprocess: Se False, bypassa o pipeline de pré-processamento.
+                Útil quando os textos já foram limpos externamente.
 
         Returns:
             Lista de listas de dicionários — uma lista de resultados para
@@ -524,18 +631,27 @@ class Comparator:
         if not candidates:
             return [[] for _ in queries]
 
-        from sklearn.feature_extraction.text import TfidfVectorizer
-
         # 1. Pré-processamento em lote dos candidatos (reutiliza cache)
-        p_candidates = self._process_batch(candidates)
+        p_candidates = self._process_batch(candidates, preprocess=preprocess)
 
-        # 2. Ajuste (fit) do vectorizer nos candidatos — UMA ÚNICA VEZ
-        vectorizer = TfidfVectorizer(ngram_range=(1, 2), min_df=1)
-        try:
-            cand_matrix = vectorizer.fit_transform(p_candidates)
-        except ValueError:
-            # Vocabulário vazio — retorna listas vazias para todas as queries
-            return [[] for _ in queries]
+        # 2. Construir índice de acordo com a estratégia de indexação
+        vectorizer = None
+        cand_matrix = None
+        bm25_index = None
+
+        if self.indexing_strategy == "bm25":
+            from text_similarity.core.bm25 import BM25Index
+
+            bm25_index = BM25Index(k1=self.bm25_k1, b=self.bm25_b)
+            bm25_index.fit(p_candidates)
+        else:
+            from sklearn.feature_extraction.text import TfidfVectorizer
+
+            vectorizer = TfidfVectorizer(ngram_range=(1, 2), min_df=1)
+            try:
+                cand_matrix = vectorizer.fit_transform(p_candidates)
+            except ValueError:
+                return [[] for _ in queries]
 
         # 3. Estratégia de execução
         if strategy == "parallel":
@@ -561,26 +677,36 @@ class Comparator:
                 fusion_strategy=self.fusion_strategy,
                 rrf_k=self.rrf_k,
                 rrf_weights=self.rrf_weights,
+                preprocess=preprocess,
+                indexing_strategy=self.indexing_strategy,
+                bm25_index=bm25_index,
             )
 
         # Estratégia sequencial (vectorized)
-        from sklearn.metrics.pairwise import (
-            cosine_similarity as sklearn_cosine_similarity,
-        )
-
         all_results: List[List[dict[str, Any]]] = []
 
         for query in queries:
-            p_query = self._process(query)
+            p_query = self._process(query, preprocess=preprocess)
 
             try:
-                query_vec = vectorizer.transform([p_query])
-                cosine_scores = sklearn_cosine_similarity(query_vec, cand_matrix)[0]
+                if self.indexing_strategy == "bm25":
+                    assert bm25_index is not None
+                    cosine_scores = bm25_index.get_scores_normalized(p_query)
+                else:
+                    from sklearn.metrics.pairwise import (
+                        cosine_similarity as sklearn_cosine_similarity,
+                    )
+
+                    assert vectorizer is not None
+                    query_vec = vectorizer.transform([p_query])
+                    cosine_scores = sklearn_cosine_similarity(
+                        query_vec, cand_matrix
+                    )[0]
             except ValueError:
                 all_results.append([])
                 continue
 
-            # 4. Filtrar pelo cosseno e pegar top-N
+            # 4. Filtrar pelo score e pegar top-N
             top_candidates = self._filter_by_cosine(
                 candidates, p_candidates, cosine_scores, min_cosine, top_n
             )
@@ -598,6 +724,7 @@ class Comparator:
         top_n: int = 50,
         min_cosine: float = 0.1,
         n_workers: int | None = None,
+        preprocess: bool = True,
     ) -> List[dict[str, Any]]:
         """Versão assíncrona de :meth:`compare_batch`.
 
@@ -614,6 +741,7 @@ class Comparator:
             top_n: Número máximo de candidatos filtrados para a etapa final.
             min_cosine: Limiar mínimo de cosseno para descartar ruidosos.
             n_workers: Número de processos. Se None, usa ``os.cpu_count()``.
+            preprocess: Se False, bypassa o pipeline de pré-processamento.
 
         Returns:
             Lista de dicionários, ordenados do maior score final para o menor.
@@ -632,6 +760,7 @@ class Comparator:
                 min_cosine=min_cosine,
                 strategy="parallel",
                 n_workers=n_workers,
+                preprocess=preprocess,
             ),
         )
 
@@ -642,6 +771,7 @@ class Comparator:
         top_n: int = 50,
         min_cosine: float = 0.1,
         n_workers: int | None = None,
+        preprocess: bool = True,
     ) -> List[List[dict[str, Any]]]:
         """Versão assíncrona de :meth:`compare_many_to_many`.
 
@@ -654,6 +784,7 @@ class Comparator:
             top_n: Número máximo de candidatos por query na etapa final.
             min_cosine: Limiar mínimo de cosseno para descartar ruidosos.
             n_workers: Número de processos. Se None, usa ``os.cpu_count()``.
+            preprocess: Se False, bypassa o pipeline de pré-processamento.
 
         Returns:
             Lista de listas de dicionários — uma lista de resultados para
@@ -673,5 +804,118 @@ class Comparator:
                 min_cosine=min_cosine,
                 strategy="parallel",
                 n_workers=n_workers,
+                preprocess=preprocess,
             ),
         )
+
+    # -----------------------------------------------------------------
+    # Re-ranking de resultados de bancos vetoriais
+    # -----------------------------------------------------------------
+
+    def rerank_vector_results(
+        self,
+        query: str,
+        vector_candidates: List[dict[str, Any]],
+        preprocess_query: bool = True,
+        preprocess_candidates: bool = False,
+    ) -> List[dict[str, Any]]:
+        """Re-rankeia resultados de um banco vetorial usando HybridSimilarity.
+
+        Recebe candidatos já retornados por um banco vetorial (Pinecone,
+        Qdrant, Milvus, PGVector, Elasticsearch, etc.) e re-ordena
+        aplicando os algoritmos linguísticos do ``HybridSimilarity``
+        (edição, fonética, entidades), usando o score vetorial original
+        como ``cos_score``.
+
+        Pula completamente o TF-IDF local e o filtro por cosseno — o
+        banco vetorial já fez essa etapa.
+
+        Args:
+            query: Texto de busca do usuário.
+            vector_candidates: Lista de dicionários com os resultados do
+                banco vetorial. Cada dict deve conter ao menos:
+
+                - ``"text"`` (str): Texto do candidato.
+                - ``"score"`` (float): Score de similaridade do banco
+                  (0.0 a 1.0).
+                - ``"id"`` (str, opcional): Identificador do documento.
+
+                Exemplo::
+
+                    [
+                        {"id": "doc1", "text": "Galaxy S22", "score": 0.82},
+                        {"id": "doc2", "text": "iPhone 15", "score": 0.71},
+                    ]
+
+            preprocess_query: Se True, aplica o pipeline na query.
+                Padrão True pois a query geralmente é texto bruto do
+                usuário.
+            preprocess_candidates: Se True, aplica o pipeline nos textos
+                dos candidatos. Padrão False pois textos vindos de
+                bancos vetoriais geralmente já estão normalizados.
+
+        Returns:
+            Lista de dicionários ordenados por score final descendente,
+            contendo ``"id"`` (se presente no input), ``"candidate"``,
+            ``"score"`` (final), ``"vector_score"`` (original do banco)
+            e ``"details"`` (dict por algoritmo).
+
+        Raises:
+            ValueError: Se algum candidato não tiver ``"text"`` ou
+                ``"score"``.
+        """
+        if not vector_candidates:
+            return []
+
+        # Validação do formato de entrada
+        for i, cand in enumerate(vector_candidates):
+            if "text" not in cand:
+                raise ValueError(
+                    f"Candidato na posição {i} não possui o campo 'text'."
+                )
+            if "score" not in cand:
+                raise ValueError(
+                    f"Candidato na posição {i} não possui o campo 'score'."
+                )
+
+        # 1. Pré-processar query e textos dos candidatos
+        p_query = self._process(query, preprocess=preprocess_query)
+        cand_texts = [c["text"] for c in vector_candidates]
+        p_texts = self._process_batch(cand_texts, preprocess=preprocess_candidates)
+
+        # 2. Montar top_candidates no formato esperado por _score_candidates
+        #    O score vetorial do banco é mapeado como cos_score
+        top_candidates: List[dict[str, Any]] = [
+            {
+                "candidate": cand["text"],
+                "p_candidate": p_text,
+                "cos_score": float(cand["score"]),
+            }
+            for cand, p_text in zip(vector_candidates, p_texts)
+        ]
+
+        # 3. Scoring híbrido (reutiliza linear ou RRF conforme configurado)
+        scored = self._score_candidates(p_query, top_candidates)
+
+        # 4. Enriquecer com id e vector_score originais
+        # Mapear candidate text → dados originais para lookup
+        original_map: dict[str, dict[str, Any]] = {
+            c["text"]: c for c in vector_candidates
+        }
+
+        enriched: List[dict[str, Any]] = []
+        for result in scored:
+            original = original_map.get(result["candidate"], {})
+            entry: dict[str, Any] = {}
+
+            if "id" in original:
+                entry["id"] = original["id"]
+
+            entry["candidate"] = result["candidate"]
+            entry["score"] = result["score"]
+            entry["vector_score"] = original.get("score", 0.0)
+            entry["details"] = result["details"]
+
+            enriched.append(entry)
+
+        return enriched

@@ -64,20 +64,28 @@ class Lemmatizer:
             return tokens
 
         if self.backend == "spacy" and self._nlp is not None:
-            # Juntamos os tokens e usamos as quebras do spacy.
-            # Mas tratamos token a token se n for entidade.
-            lemmatized_tokens = []
-            for t in tokens:
+            lemmatized_tokens: list[str] = []
+            entity_indices: set[int] = set()
+            regular_tokens: list[str] = []
+
+            for i, t in enumerate(tokens):
                 if t.startswith("<"):
+                    entity_indices.add(i)
+                else:
+                    regular_tokens.append(t)
+
+            # Batch: uma chamada nlp.pipe() ao invés de N chamadas nlp()
+            docs = list(self._nlp.pipe(regular_tokens, batch_size=256))
+
+            reg_idx = 0
+            for i, t in enumerate(tokens):
+                if i in entity_indices:
                     lemmatized_tokens.append(t)
                 else:
-                    doc = self._nlp(" ".join([t]))
-                    # Pegamos as lemmas dos múltiplos tokens gerados.
-                    lemmas = [token.lemma_ for token in doc]
-                    if lemmas:
-                        lemmatized_tokens.append("".join(lemmas))
-                    else:
-                        lemmatized_tokens.append(t)
+                    lemmas = [tok.lemma_ for tok in docs[reg_idx]]
+                    lemmatized_tokens.append("".join(lemmas) if lemmas else t)
+                    reg_idx += 1
+
             return lemmatized_tokens
 
         if self.backend == "nltk" and self._stemmer is not None:

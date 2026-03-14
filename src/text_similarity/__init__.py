@@ -4,6 +4,7 @@ Biblioteca Python para comparação de similaridade de textos otimizada para PT-
 """
 
 from .api import Comparator
+from .core.bm25 import BM25Index
 from .core.fusion import RRFusion
 from .exceptions import (
     PipelineError,
@@ -12,8 +13,9 @@ from .exceptions import (
     TextSimilarityError,
 )
 
-__version__ = "0.4.0"
+__version__ = "0.5.0"
 __all__ = [
+    "BM25Index",
     "Comparator",
     "RRFusion",
     "TextSimilarityError",

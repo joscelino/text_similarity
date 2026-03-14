@@ -92,3 +92,86 @@ def test_compare_batch_invalid_strategy(smart_comp):
 def test_compare_batch_empty_candidates(smart_comp):
     results = smart_comp.compare_batch("qualquer", [])
     assert results == []
+
+
+# --- Testes com indexing_strategy="bm25" ---
+
+
+@pytest.fixture
+def bm25_comp():
+    return Comparator.smart(entities=["product_model"], indexing_strategy="bm25")
+
+
+def test_compare_batch_bm25_returns_results(bm25_comp):
+    """BM25 retorna resultados válidos em compare_batch."""
+    query = "Comprei um iPhone 13"
+    candidates = [
+        "celular iphone 13 novo",
+        "samsung galaxy s22",
+        "capa para iphone 11",
+        "carregador",
+        "comprei o iphone 13 ontem",
+    ]
+
+    results = bm25_comp.compare_batch(query, candidates, top_n=3, min_cosine=0.0)
+
+    assert len(results) > 0
+    assert results[0]["score"] > 0.0
+    assert "candidate" in results[0]
+    assert "details" in results[0]
+
+
+def test_compare_many_bm25_returns_results(bm25_comp):
+    """BM25 retorna resultados válidos em compare_many_to_many."""
+    queries = ["iPhone 13", "Galaxy S22"]
+    candidates = [
+        "celular iphone 13 novo",
+        "samsung galaxy s22 ultra",
+        "notebook dell inspiron",
+    ]
+
+    results = bm25_comp.compare_many_to_many(
+        queries, candidates, top_n=3, min_cosine=0.0
+    )
+
+    assert len(results) == 2
+    assert len(results[0]) > 0
+    assert len(results[1]) > 0
+
+
+def test_compare_batch_bm25_with_entities(bm25_comp):
+    """BM25 funciona com extração de entidades."""
+    query = "samsung s22 ultra"
+    candidates = [
+        "Vende-se samsung galaxy s22 ultra na caixa",
+        "samsung s21 barato",
+        "película s22 ultra",
+    ]
+
+    results = bm25_comp.compare_batch(query, candidates, top_n=5, min_cosine=0.0)
+
+    assert len(results) > 0
+    # Candidato com "s22 ultra" deve estar no topo
+    assert "s22 ultra" in results[0]["candidate"].lower()
+
+
+def test_compare_batch_bm25_empty_candidates(bm25_comp):
+    """BM25 retorna lista vazia para candidatos vazios."""
+    results = bm25_comp.compare_batch("qualquer", [])
+    assert results == []
+
+
+def test_compare_batch_bm25_custom_params():
+    """BM25 aceita parâmetros k1 e b customizados."""
+    comp = Comparator.smart(
+        entities=["product_model"],
+        indexing_strategy="bm25",
+        bm25_k1=1.5,
+        bm25_b=0.3,
+    )
+
+    results = comp.compare_batch(
+        "notebook dell", ["notebook dell inspiron", "mouse"], top_n=2, min_cosine=0.0
+    )
+
+    assert len(results) > 0

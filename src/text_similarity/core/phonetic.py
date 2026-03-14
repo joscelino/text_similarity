@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import re
 import unicodedata
 
 from rapidfuzz import fuzz
@@ -17,6 +18,19 @@ class PhoneticSimilarity(SimilarityAlgorithm):
     aliado à distância Levenshtein.
     """
 
+    # Substituições multi-caractere (ordem importa: sorted por len desc)
+    _MULTI_CHAR_MAP = {
+        "ss": "s", "rr": "r", "ll": "l",
+        "ce": "se", "ci": "si", "ch": "x",
+        "qu": "k", "ge": "je", "gi": "ji",
+        "lh": "l", "nh": "n",
+    }
+    _MULTI_RE = re.compile("|".join(
+        re.escape(k) for k in sorted(_MULTI_CHAR_MAP, key=len, reverse=True)
+    ))
+    _SINGLE_MAP = {"c": "k", "h": ""}
+    _SINGLE_RE = re.compile(r"[ch]")
+
     def _phonetic_hash(self, text: str) -> str:
         """Converte o texto para uma representação aproximada do som em PT-BR.
 
@@ -24,6 +38,7 @@ class PhoneticSimilarity(SimilarityAlgorithm):
         "fazenda" -> "fazenda".
         """
         # Removendo todos os acentos que sobraram
+        # Nota: após NFKD + ASCII ignore, ç já vira c
         text = (
             unicodedata.normalize("NFKD", text)
             .encode("ASCII", "ignore")
@@ -31,28 +46,19 @@ class PhoneticSimilarity(SimilarityAlgorithm):
         )
         text = text.lower()
 
-        # Consoantes juntas - redução
-        text = text.replace("ss", "s").replace("rr", "r").replace("ll", "l")
+        # Substituições multi-caractere em uma passada
+        text = self._MULTI_RE.sub(
+            lambda m: self._MULTI_CHAR_MAP[m.group()], text
+        )
 
-        # Som de S / Z / C / Ç
-        text = text.replace("ç", "s")
-        text = text.replace("ce", "se").replace("ci", "si")
-        # Ch -> X
-        text = text.replace("ch", "x")
-        # Quem / Que -> k
-        text = text.replace("qu", "k")
-        text = text.replace("c", "k")  # O restante dos C (ca, co, cu) viram K
-
-        # G / J
-        text = text.replace("ge", "je").replace("gi", "ji")
+        # Substituições single-char (c->k, h->"")
+        text = self._SINGLE_RE.sub(
+            lambda m: self._SINGLE_MAP[m.group()], text
+        )
 
         # M final -> N (bem -> ben)
         if text.endswith("m"):
             text = text[:-1] + "n"
-
-        # H mudo -> ignorado ou dependendo Lh/Nh vira uma só
-        text = text.replace("lh", "l").replace("nh", "n")
-        text = text.replace("h", "")
 
         return text
 

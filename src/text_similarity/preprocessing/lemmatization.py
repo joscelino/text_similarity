@@ -51,7 +51,7 @@ class Lemmatizer:
             pass
 
         logger.warning(
-            "Lemmatizer operando em modo pass-through (nenhum backend encotrado). "
+            "Lemmatizer operando em modo pass-through (nenhum backend encontrado). "
             "Para lematização real, instale o spaCy e o modelo pt_core_news_sm."
         )
 

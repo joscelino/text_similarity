@@ -215,3 +215,4 @@ skills-lock.json
 dist/
 .vscode/
 .claude/
+tests/assets/

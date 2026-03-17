@@ -58,33 +58,16 @@ class EntityIntersectionSimilarity(SimilarityAlgorithm):
         if not tags1 or not tags2:
             return 0.0
 
-        # Verifica contenção: se algum valor (sem os delimitadores <tipo: ... >)
-        # do menor conjunto está inteiramente contido em algum valor do
-        # maior conjunto. Isso ajuda quando as strings de origem colaram
-        # os modelos, ex: <productmodel:PPW38002> in <productmodel:PPW38002PROFEMUR>
-
         # Determina qual conjunto tem menos tags (a "busca" provavelmente)
         if len(tags1) <= len(tags2):
-            search_tags, target_tags = list(tags1), list(tags2)
+            search_tags, target_tags = tags1, tags2
         else:
-            search_tags, target_tags = list(tags2), list(tags1)
+            search_tags, target_tags = tags2, tags1
 
-        for s_tag in search_tags:
-            # Extrai apenas o valor real mapeado
-            # ex: <productmodel:GN500> -> GN500
-            s_val = s_tag.split(":", 1)[1][:-1]
+        # Todas as tags do menor conjunto devem estar exatamente no maior.
+        # Match exato garante: sem falso positivo por substring ("250" ≠ "250080612")
+        # e sem mistura de tipos (<money:250> ≠ <productmodel:250>).
+        if search_tags.issubset(target_tags):
+            return 1.0
 
-            # Checa se esse valor existe como substring dentro de algum target_tag
-            found = False
-            for t_tag in target_tags:
-                t_val = t_tag.split(":", 1)[1][:-1]
-                if s_val in t_val:
-                    found = True
-                    break
-
-            # Como a busca é de contenção PERFECTA (todas as tags buscadas devem
-            # ser encontradas para validar o short-circuit), se uma falhar, aborta.
-            if not found:
-                return 0.0
-
-        return 1.0
+        return 0.0

@@ -17,7 +17,11 @@ class HybridSimilarity(SimilarityAlgorithm):
     Modelos disponíveis (TF-IDF Cosseno, Distância de Edição e Fonética).
     """
 
-    def __init__(self, weights: dict[str, float] | None = None) -> None:
+    def __init__(
+        self,
+        weights: dict[str, float] | None = None,
+        target_entities: list[str] | None = None,
+    ) -> None:
         """Inicializa agregador de distâncias computacionais simultâneas.
 
         Args:
@@ -25,6 +29,9 @@ class HybridSimilarity(SimilarityAlgorithm):
                 algoritmo no resultado final. Padrão:
                 ``{"cosine": 0.35, "edit": 0.35,
                 "phonetic": 0.15, "entity": 0.15}``.
+            target_entities: Lista de tipos de entidade para filtrar no
+                EntityIntersectionSimilarity (ex: ["productmodel"]).
+                Se None, considera qualquer tag no padrão <X:Y>.
         """
         self.weights = weights or {
             "cosine": 0.35,
@@ -45,7 +52,7 @@ class HybridSimilarity(SimilarityAlgorithm):
             "cosine": CosineSimilarity(),
             "edit": EditDistanceSimilarity(method="ratio"),
             "phonetic": PhoneticSimilarity(),
-            "entity": EntityIntersectionSimilarity(),
+            "entity": EntityIntersectionSimilarity(target_entities=target_entities),
         }
 
         # Instanciar SemanticSimilarity APENAS se ativado para evitar overhead

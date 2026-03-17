@@ -492,6 +492,43 @@ comp = Comparator.smart(
 )
 ```
 
+#### BM25 + `entities=["product_model"]`: sinergia para modelos técnicos
+
+A combinação `indexing_strategy="bm25"` + `entities=["product_model"]` é especialmente eficaz para catálogos com modelos no formato `XX.NNN.NN` (ex: `QS.250.08`, `QG.418.17`).
+
+O pipeline opera em **duas etapas distintas**:
+
+| Etapa | TF-IDF | BM25 |
+|---|---|---|
+| **Pré-filtragem** | Vetoriza tokens (`qs`, `250`, `08`) — `250` tem IDF baixo (aparece em muitos candidatos) | Idem, mas `<productmodel:QS25008>` (gerado pelo extrator) tem IDF altíssimo — candidato exato sobe no ranking |
+| **Scoring final** | `HybridSimilarity` (cosine + edit + phonetic + entity) — idêntico nos dois casos | Idêntico — short-circuit de entidade dispara `0.95` se o modelo exato estiver no `top_n` |
+
+**Com TF-IDF isolado:** o token `250` aparece em `250.080.612`, `250.080.588`, etc. — o candidato exato pode não entrar no `top_n` se houver muitos concorrentes com o mesmo prefixo numérico.
+
+**Com BM25 + entities:** o tag `<productmodel:QS25008>` é único no corpus → IDF máximo → candidato exato sempre entra no `top_n` → short-circuit garante `score = 0.95`.
+
+```python
+from text_similarity.api import Comparator
+
+candidatos = [
+    "QS.250.08",
+    "250.080.612",
+    "250.080.588",
+    "250.080.342",
+]
+
+comp = Comparator.smart(
+    entities=["product_model"],
+    indexing_strategy="bm25",
+)
+
+resultados = comp.compare_batch("QS.250.08", candidatos, top_n=4, min_cosine=0.0)
+# resultados[0] → {"candidate": "QS.250.08", "score": 0.95}   ← short-circuit ativo
+# resultados[1] → {"candidate": "250.080.612", "score": ~0.3}  ← sem entidade em comum
+```
+
+> **Quando usar esta combinação:** catálogos de peças técnicas, SKUs com separadores de ponto ou hífen, referências de produtos industriais. Para buscas de texto livre (ex: "quero um celular barato"), a combinação não adiciona benefício — use `Comparator.smart()` sem `indexing_strategy` específico.
+
 ### Indexação Densa (`indexing_strategy="dense"`)
 
 Para cenários onde a query e os candidatos são **semanticamente equivalentes mas não compartilham palavras** (ex: `"veículo flex"` vs `"carro bicombustível"`), o índice denso usa embeddings do `sentence-transformers` como filtro inicial, capturando similaridade semântica antes mesmo do `HybridSimilarity` entrar em ação.
@@ -881,7 +918,7 @@ Extratores disponíveis por padrão:
 | `date` | `12/03/2023`, `ontem`, `amanhã`, `25 de abril` |
 | `dimension` | `2kg`, `1.5l`, `30cm`, `10m²` |
 | `number` | `3`, `três`, `1000` |
-| `product_model` | `S22 Ultra`, `iPhone 13`, `XJ-900` |
+| `product_model` | `S22 Ultra`, `iPhone 13`, `XJ-900`, `QS.250.08`, `QG.418.17` |
 
 
 ## 🤝 Contribuindo

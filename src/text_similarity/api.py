@@ -107,6 +107,10 @@ class Comparator:
         self.pipeline = PreprocessingPipeline(stages)
 
         # Configuração do Algoritmo
+        # Converte nomes de entidades para os prefixos usados nas tags do pipeline
+        # ex: ["product_model"] → ["productmodel"]
+        entity_types = [e.replace("_", "") for e in (self.entities or [])] or None
+
         if self.mode == "smart":
             # Dá peso maior para a fonética e entidades exatas (tokens)
             weights = {"cosine": 0.45, "edit": 0.25, "phonetic": 0.20, "entity": 0.10}
@@ -119,12 +123,16 @@ class Comparator:
                     "entity": 0.10,
                     "semantic": 0.30,
                 }
-            self.algorithm: SimilarityAlgorithm = HybridSimilarity(weights=weights)
+            self.algorithm: SimilarityAlgorithm = HybridSimilarity(
+                weights=weights, target_entities=entity_types
+            )
         else:
             weights = {"cosine": 0.5, "edit": 0.5, "phonetic": 0.0}
             if kwargs.get("use_embeddings", False):
                 weights = {"cosine": 0.3, "edit": 0.3, "phonetic": 0.0, "semantic": 0.4}
-            self.algorithm = HybridSimilarity(weights=weights)
+            self.algorithm = HybridSimilarity(
+                weights=weights, target_entities=entity_types
+            )
 
     @classmethod
     def basic(cls) -> "Comparator":

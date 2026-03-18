@@ -7,7 +7,37 @@
 [![Ruff](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/astral-sh/ruff/main/assets/badge/v2.json)](https://github.com/astral-sh/ruff)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 
-Uma biblioteca Python otimizada e especializada na comparação de similaridade de textos em português brasileiro (PT-BR). Ideal para sistemas de NLP, chatbots, análise de sentimento e cruzamento de dados onde as peculiaridades do idioma, formatação de dinheiro, fonética regional e medidas influenciam a real intenção e semelhança dos textos.
+> Uma biblioteca Python otimizada e especializada na comparação de similaridade de textos em português brasileiro (PT-BR). Ideal para sistemas de NLP, chatbots, análise de sentimento e cruzamento de dados onde as peculiaridades do idioma, formatação de dinheiro, fonética regional e medidas influenciam a real intenção e semelhança dos textos.
+
+---
+
+## 📚 Índice
+
+- [✨ Recursos Principais](#-recursos-principais)
+- [Requisitos](#requisitos)
+- [🚀 Instalação](#-instalação)
+- [📖 Como Usar](#-como-usar)
+  - [Modo Básico](#modo-básico-rápido-e-simples)
+  - [Modo Smart](#modo-smart-entidades-e-fonética)
+  - [Modo Semântico](#modo-semântico-word-embeddings)
+  - [Processamento em Lote](#processamento-em-lote-batch)
+  - [Comparação Multi-Query](#comparação-multi-query-compare_many_to_many)
+  - [Fusão de Rankings via RRF](#fusão-de-rankings-via-rrf-fusion_strategyrrf)
+  - [Execução Paralela](#execução-paralela-strategyparallel)
+  - [Integração Async](#integração-async-fastapi-aiohttp)
+  - [Re-Ranking de Bancos Vetoriais](#re-ranking-de-resultados-de-bancos-vetoriais)
+  - [Entendendo os Matches (Explain)](#entendendo-por-que-deram-match-explain)
+  - [Uso Apenas para Tratamento de Texto](#uso-apenas-para-tratamento-de-texto)
+  - [Bypass do Pré-processamento](#bypass-do-pré-processamento-preprocessfalse)
+- [📊 Integração com DataFrames](#-integração-com-dataframes)
+- [⚡ Performance para Alto Volume](#-performance-para-alto-volume)
+- [🎯 Interpretação dos Scores](#-interpretação-dos-scores)
+- [📈 Calibração de Pesos (Grid Search)](#-calibração-de-pesos-grid-search)
+- [⚙️ Configuração do Cache](#️-configuração-do-cache)
+- [🔌 Extensibilidade](#-extensibilidade--registrando-entidades-customizadas)
+- [🤝 Contribuindo](#-contribuindo)
+
+---
 
 ## ✨ Recursos Principais
 
@@ -32,7 +62,9 @@ Uma biblioteca Python otimizada e especializada na comparação de similaridade 
 
 ## Requisitos
 
-- **Python:** \>= 3.8
+- **Python:** >= 3.8
+- **Dependências principais:** `scikit-learn`, `rapidfuzz`, `sentence-transformers` (incluída desde a v0.4.0)
+- **Dependência opcional:** `spacy` + modelo `pt_core_news_sm` (para lematização)
 
 ---
 
@@ -59,7 +91,6 @@ uv run python -m spacy download pt_core_news_sm
 pip install "text-similarity-br[nlp]"
 python -m spacy download pt_core_news_sm
 ```
-
 
 ---
 
@@ -118,6 +149,19 @@ comp_lab = Comparator.smart(entities=["date", "dimension"])
 ```
 
 > **Dica:** Filtrar entidades melhora a precisão evitando falsos positivos. Um extrator de `date` ativo num catálogo de produtos pode mapear incorretamente SKUs contendo dígitos de ano.
+
+#### Opções de Pesos e Algoritmos
+
+Ao utilizar o modo `smart`, você pode equilibrar os seguintes algoritmos através do parâmetro `weights` (no construtor) ou `rrf_weights` (nas funções de média/batch):
+
+| Opção | Nome Técnico | O que avalia | Melhor uso |
+| :--- | :--- | :--- | :--- |
+| **`cosine`** | Cosseno (TF-IDF) | Frequência e raridade das palavras. | Detectar palavras-chave idênticas. |
+| **`bm25`** | Okapi BM25 | Relevância com saturação de frequência. | Textos curtos (produtos, SKUs). Ativado via `indexing_strategy="bm25"`. |
+| **`edit`** | Levenshtein | Proximidade de caracteres (escrita). | Capturar erros de digitação (typos). |
+| **`phonetic`** | Fonética (PT-BR) | Pronúncia das palavras em português. | Capturar trocas de letras com som igual (ex: S/Z/X). |
+| **`semantic`** | Semântica | Significado e contexto (Embeddings). | Encontrar sinônimos (ex: "carro" vs "veículo"). |
+| **`entity`** | Entidades | Identificadores específicos. | Garantir que códigos e modelos coincidam. |
 
 ### Modo Semântico (Word Embeddings)
 Para capturar a real intenção semântica entre sinônimos que não compartilham nenhuma letra (ex: `"veículo"` vs `"carro"`), você pode ativar o motor de **Sentence-Transformers**.
@@ -218,19 +262,6 @@ O parâmetro `rrf_k` (padrão 60) controla a suavização: valores maiores atenu
 # RRF com suavização mais agressiva
 comp = Comparator.smart(fusion_strategy="rrf", rrf_k=100)
 ```
-
-#### Opções de Pesos e Algoritmos
-
-Ao utilizar o modo `smart`, você pode equilibrar os seguintes algoritmos através do parâmetro `weights` (no construtor) ou `rrf_weights` (nas funções de média/batch):
-
-| Opção | Nome Técnico | O que avalia | Melhor uso |
-| :--- | :--- | :--- | :--- |
-| **`cosine`** | Cosseno (TF-IDF) | Frequência e raridade das palavras. | Detectar palavras-chave idênticas. |
-| **`bm25`** | Okapi BM25 | Relevância com saturação de frequência. | Textos curtos (produtos, SKUs). Ativado via `indexing_strategy="bm25"`. |
-| **`edit`** | Levenshtein | Proximidade de caracteres (escrita). | Capturar erros de digitação (typos). |
-| **`phonetic`** | Fonética (PT-BR) | Pronúncia das palavras em português. | Capturar trocas de letras com som igual (ex: S/Z/X). |
-| **`semantic`** | Semântica | Significado e contexto (Embeddings). | Encontrar sinônimos (ex: "carro" vs "veículo"). |
-| **`entity`** | Entidades | Identificadores específicos. | Garantir que códigos e modelos coincidam. |
 
 #### Pesos por Algoritmo (`rrf_weights`)
 
@@ -349,7 +380,6 @@ async def bulk_search(queries: list[str], candidates: list[str]):
 
 > **Métodos async disponíveis:** `compare_batch_async()` e `compare_many_to_many_async()`. Ambos usam `strategy="parallel"` internamente.
 
-
 ### Re-Ranking de Resultados de Bancos Vetoriais
 Quando você já possui resultados de um banco vetorial (Pinecone, Qdrant, Milvus, PGVector, Elasticsearch) e quer **re-ordenar** usando validação linguística PT-BR (edição, fonética, entidades), use o `rerank_vector_results`. Ele funciona como um **Cross-Encoder linguístico brasileiro**, aplicando os algoritmos do `HybridSimilarity` sobre os resultados já filtrados pelo banco.
 
@@ -416,6 +446,182 @@ print(detalhes["details"])
 > **Short-circuit no `explain()`:** Quando uma entidade é detectada com interseção total (ex: busca por `<productmodel:GN500>` encontrada no texto alvo), `explain()` retorna `{"score": 0.95, "details": {"entity": {..., "short_circuit": True}}}`, igualmente ao `compare()`.
 
 > **`compare_batch()` com lista vazia:** `comp.compare_batch("qualquer", [])` retorna `[]` imediatamente, sem processamento.
+
+### Uso Apenas para Tratamento de Texto
+Se o seu objetivo não for realizar comparações, mas apenas aproveitar o robusto motor de processamento em português (para limpar bases de dados, treinar modelos, remover acentos, expandir contrações e lematizar), você pode instanciar as etapas da `Pipeline` de forma autônoma e oficial:
+
+```python
+from text_similarity.pipeline.pipeline import PreprocessingPipeline
+from text_similarity.pipeline.backends import CleanTextStage, TokenizerStage, StopwordsStage
+
+# Monte seu pipeline customizado apenas com o que precisa:
+pipeline = PreprocessingPipeline([
+    CleanTextStage(),  # Expansão de contrações ("vc" -> "você"), sem acentos, lowercase
+    TokenizerStage(),  # Tokenização segura
+    StopwordsStage()   # Remoção de conectivos inúteis do PT-BR
+])
+
+texto_bruto = "Limpando meeu texto, crz... vc viu a promo???"
+texto_tratado, stats = pipeline.process(texto_bruto)
+
+print(texto_tratado)
+# Saída esperada (bag of words tratado): "limpar texto crz ver promo"
+```
+
+### Bypass do Pré-processamento (`preprocess=False`)
+Quando seus textos **já foram limpos externamente** (ex: vindos de um pipeline ETL, banco de dados normalizado ou outro sistema de NLP), você pode desativar o pré-processamento para evitar transformações redundantes e ganhar performance:
+
+```python
+from text_similarity.api import Comparator
+comp = Comparator.smart()
+
+# Textos já normalizados pelo seu pipeline externo
+clean1 = "samsung galaxy s22 ultra 256gb"
+clean2 = "samsung galaxy s22 ultra 256gb preto"
+
+# Bypassa limpeza, tokenização, stopwords e lematização
+score = comp.compare(clean1, clean2, preprocess=False)
+print(f"Score: {score:.2f}")
+
+# Também funciona com explain
+detalhes = comp.explain(clean1, clean2, preprocess=False)
+```
+
+Funciona em **todos os métodos** de comparação:
+
+```python
+# Batch — 1 query × N candidatos já limpos
+resultados = comp.compare_batch(
+    "galaxy s22", candidatos_limpos,
+    top_n=10, min_cosine=0.1, preprocess=False,
+)
+
+# Multi-query — M queries × N candidatos já limpos
+todos = comp.compare_many_to_many(
+    queries_limpas, candidatos_limpos,
+    top_n=5, preprocess=False,
+)
+
+# Async
+resultados = await comp.compare_batch_async(
+    "galaxy s22", candidatos_limpos,
+    top_n=10, preprocess=False,
+)
+```
+
+> **Quando usar `preprocess=False`:**
+> - Dados vindos de pipelines ETL que já normalizam texto.
+> - Re-ranking de resultados já processados por outro sistema (ex: Elasticsearch, banco vetorial).
+> - Benchmarks onde você quer isolar o custo dos algoritmos de similaridade sem overhead do pipeline.
+>
+> **Atenção:** Com `preprocess=False`, o cache in-memory **não é utilizado** (não há hash nem armazenamento), e nenhuma etapa do pipeline é executada — incluindo extração de entidades. Certifique-se de que seus textos estão no formato esperado pelos algoritmos.
+
+---
+
+## 📊 Integração com DataFrames
+
+A biblioteca reconhece automaticamente o tipo de DataFrame usado — **pandas, polars, cuDF, modin** ou qualquer objeto subscritável por nome de coluna. Nenhuma dependência adicional é instalada: os métodos retornam `List[dict]`, e você converte para o DataFrame da sua escolha.
+
+### Busca em DataFrame (`compare_dataframe`)
+
+Compara uma query contra uma coluna de texto e retorna uma `List[dict]` com as linhas mais similares, incluindo todas as chaves originais e uma chave `score`:
+
+```python
+# pandas
+import pandas as pd
+from text_similarity.api import Comparator
+
+comp = Comparator.smart(entities=["product_model"])
+
+catalogo = pd.DataFrame({
+    "sku": ["A001", "A002", "A003", "A004"],
+    "descricao": [
+        "Notebook Dell Inspiron 15 i5",
+        "Mouse Logitech MX Master 3",
+        "Monitor Samsung 27 4K",
+        "Teclado Mecânico Redragon",
+    ],
+    "preco": [3200, 450, 1800, 380],
+})
+
+resultados = comp.compare_dataframe(
+    df=catalogo,
+    text_column="descricao",
+    query="notebook dell inspiron",
+    top_n=3,
+    min_cosine=0.1,
+)
+
+# resultados é List[dict] — converta como quiser
+df_resultado = pd.DataFrame(resultados)
+print(df_resultado[["sku", "descricao", "preco", "score"]])
+```
+
+```python
+# polars (sem nenhuma alteração na chamada)
+import polars as pl
+
+catalogo_pl = pl.DataFrame({
+    "sku": ["A001", "A002", "A003", "A004"],
+    "descricao": [
+        "Notebook Dell Inspiron 15 i5",
+        "Mouse Logitech MX Master 3",
+        "Monitor Samsung 27 4K",
+        "Teclado Mecânico Redragon",
+    ],
+    "preco": [3200, 450, 1800, 380],
+})
+
+resultados = comp.compare_dataframe(catalogo_pl, "descricao", "notebook dell inspiron")
+df_resultado = pl.DataFrame(resultados)
+```
+
+### Cruzamento de Bases (`record_linkage`)
+
+Compara duas tabelas encontrando os pares mais similares — ideal para deduplicação entre fornecedores ou cruzamento de catálogos. Retorna `List[dict]`:
+
+```python
+import pandas as pd
+from text_similarity.api import Comparator
+
+comp = Comparator.smart()
+
+tabela_a = pd.DataFrame({
+    "id_a": [1, 2, 3],
+    "produto_a": ["iPhone 13 Pro 256GB", "Samsung Galaxy S22", "Notebook Dell i5"],
+})
+
+tabela_b = pd.DataFrame({
+    "id_b": [10, 20, 30, 40],
+    "produto_b": [
+        "Apple iPhone 13 Pro",
+        "Galaxy S22 Ultra",
+        "Dell Inspiron 15 i5 8GB",
+        "Mouse sem fio Logitech",
+    ],
+})
+
+pares = comp.record_linkage(
+    df_a=tabela_a,
+    df_b=tabela_b,
+    col_a="produto_a",
+    col_b="produto_b",
+    top_n=2,
+    min_cosine=0.1,
+)
+
+# pares é List[dict] — converta como quiser
+df_pares = pd.DataFrame(pares)
+print(df_pares[["text_a", "text_b", "score"]])
+```
+
+Cada dict contém: `index_a`, `text_a`, `index_b`, `text_b`, `score`, `details`.
+
+> **Quando usar `compare_dataframe` vs `record_linkage`:**
+> - `compare_dataframe` → 1 query × N linhas de um DataFrame (busca de um usuário).
+> - `record_linkage` → M linhas × N linhas (deduplicação entre duas bases, cruzamento de fornecedores).
+
+---
 
 ## ⚡ Performance para Alto Volume
 
@@ -574,8 +780,6 @@ comp = Comparator.smart(
 
 **Recomendação:** use BM25 para catálogos de produtos/SKUs, TF-IDF para bases de texto longo ou volume extremo de queries, e Dense apenas para catálogos de até ~10k itens com alta variação lexical entre query e candidatos.
 
-> **Compatível com todas as features:** as três estratégias funcionam com `strategy="parallel"`, `fusion_strategy="rrf"`, `preprocess=False`, métodos async e `rerank_vector_results`. A troca é transparente — apenas mude o `indexing_strategy`.
-
 ### Otimização: Evitando Recálculo Semântico com `indexing_strategy="dense"`
 
 Quando `indexing_strategy="dense"` e `use_embeddings=True` são usados simultaneamente **com o mesmo modelo**, a biblioteca detecta automaticamente que os embeddings da query e dos candidatos já foram computados na fase de filtragem pelo `DenseIndex` e **reutiliza o score** na fase híbrida — eliminando o reencoding redundante:
@@ -595,114 +799,7 @@ resultados = comp.compare_batch("veículo flex", candidatos, top_n=10)
 
 > **Quando NÃO ocorre:** Se `dense_model_name` for diferente do modelo padrão do `SemanticSimilarity`, os modelos são distintos e o reuso não é aplicado — cada algoritmo usa seu próprio encoder.
 
----
-
-## 📊 Integração com DataFrames
-
-A biblioteca reconhece automaticamente o tipo de DataFrame usado — **pandas, polars, cuDF, modin** ou qualquer objeto subscritável por nome de coluna. Nenhuma dependência adicional é instalada: os métodos retornam `List[dict]`, e você converte para o DataFrame da sua escolha.
-
-### Busca em DataFrame (`compare_dataframe`)
-
-Compara uma query contra uma coluna de texto e retorna uma `List[dict]` com as linhas mais similares, incluindo todas as chaves originais e uma chave `score`:
-
-```python
-# pandas
-import pandas as pd
-from text_similarity.api import Comparator
-
-comp = Comparator.smart(entities=["product_model"])
-
-catalogo = pd.DataFrame({
-    "sku": ["A001", "A002", "A003", "A004"],
-    "descricao": [
-        "Notebook Dell Inspiron 15 i5",
-        "Mouse Logitech MX Master 3",
-        "Monitor Samsung 27 4K",
-        "Teclado Mecânico Redragon",
-    ],
-    "preco": [3200, 450, 1800, 380],
-})
-
-resultados = comp.compare_dataframe(
-    df=catalogo,
-    text_column="descricao",
-    query="notebook dell inspiron",
-    top_n=3,
-    min_cosine=0.1,
-)
-
-# resultados é List[dict] — converta como quiser
-df_resultado = pd.DataFrame(resultados)
-print(df_resultado[["sku", "descricao", "preco", "score"]])
-```
-
-```python
-# polars (sem nenhuma alteração na chamada)
-import polars as pl
-
-catalogo_pl = pl.DataFrame({
-    "sku": ["A001", "A002", "A003", "A004"],
-    "descricao": [
-        "Notebook Dell Inspiron 15 i5",
-        "Mouse Logitech MX Master 3",
-        "Monitor Samsung 27 4K",
-        "Teclado Mecânico Redragon",
-    ],
-    "preco": [3200, 450, 1800, 380],
-})
-
-resultados = comp.compare_dataframe(catalogo_pl, "descricao", "notebook dell inspiron")
-df_resultado = pl.DataFrame(resultados)
-```
-
-### Cruzamento de Bases (`record_linkage`)
-
-Compara duas tabelas encontrando os pares mais similares — ideal para deduplicação entre fornecedores ou cruzamento de catálogos. Retorna `List[dict]`:
-
-```python
-import pandas as pd
-from text_similarity.api import Comparator
-
-comp = Comparator.smart()
-
-tabela_a = pd.DataFrame({
-    "id_a": [1, 2, 3],
-    "produto_a": ["iPhone 13 Pro 256GB", "Samsung Galaxy S22", "Notebook Dell i5"],
-})
-
-tabela_b = pd.DataFrame({
-    "id_b": [10, 20, 30, 40],
-    "produto_b": [
-        "Apple iPhone 13 Pro",
-        "Galaxy S22 Ultra",
-        "Dell Inspiron 15 i5 8GB",
-        "Mouse sem fio Logitech",
-    ],
-})
-
-pares = comp.record_linkage(
-    df_a=tabela_a,
-    df_b=tabela_b,
-    col_a="produto_a",
-    col_b="produto_b",
-    top_n=2,
-    min_cosine=0.1,
-)
-
-# pares é List[dict] — converta como quiser
-df_pares = pd.DataFrame(pares)
-print(df_pares[["text_a", "text_b", "score"]])
-```
-
-Cada dict contém: `index_a`, `text_a`, `index_b`, `text_b`, `score`, `details`.
-
-> **Quando usar `compare_dataframe` vs `record_linkage`:**
-> - `compare_dataframe` → 1 query × N linhas de um DataFrame (busca de um usuário).
-> - `record_linkage` → M linhas × N linhas (deduplicação entre duas bases, cruzamento de fornecedores).
-
----
-
-### Liberando o modelo da memória (`unload_embeddings_model`)
+### Liberando o Modelo da Memória (`unload_embeddings_model`)
 
 Após uma sessão de inferência intensa, você pode liberar o modelo semântico da RAM/VRAM:
 
@@ -731,75 +828,6 @@ O score retornado varia entre `0.0` (completamente diferentes) e `1.0` (idêntic
 | `< 0.35` | Sem relação semântica relevante |
 
 > **Dica:** Para domínios com códigos de produto (materiais, SKUs, peças técnicas), um threshold de `>= 0.60` é um bom ponto de partida. Calibre com pares conhecidos do seu domínio para ajustar precisão × recall.
-
-### Uso Apenas para Tratamento de Texto
-Se o seu objetivo não for realizar comparações, mas apenas aproveitar o robusto motor de processamento em português (para limpar bases de dados, treinar modelos, remover acentos, expandir contrações e lematizar), você pode instanciar as etapas da `Pipeline` de forma autônoma e oficial:
-
-```python
-from text_similarity.pipeline.pipeline import PreprocessingPipeline
-from text_similarity.pipeline.backends import CleanTextStage, TokenizerStage, StopwordsStage
-
-# Monte seu pipeline customizado apenas com o que precisa:
-pipeline = PreprocessingPipeline([
-    CleanTextStage(),  # Expansão de contrações ("vc" -> "você"), sem acentos, lowercase
-    TokenizerStage(),  # Tokenização segura
-    StopwordsStage()   # Remoção de conectivos inúteis do PT-BR
-])
-
-texto_bruto = "Limpando meeu texto, crz... vc viu a promo???"
-texto_tratado, stats = pipeline.process(texto_bruto)
-
-print(texto_tratado)
-# Saída esperada (bag of words tratado): "limpar texto crz ver promo"
-```
-
-### Bypass do Pré-processamento (`preprocess=False`)
-Quando seus textos **já foram limpos externamente** (ex: vindos de um pipeline ETL, banco de dados normalizado ou outro sistema de NLP), você pode desativar o pré-processamento para evitar transformações redundantes e ganhar performance:
-
-```python
-from text_similarity.api import Comparator
-comp = Comparator.smart()
-
-# Textos já normalizados pelo seu pipeline externo
-clean1 = "samsung galaxy s22 ultra 256gb"
-clean2 = "samsung galaxy s22 ultra 256gb preto"
-
-# Bypassa limpeza, tokenização, stopwords e lematização
-score = comp.compare(clean1, clean2, preprocess=False)
-print(f"Score: {score:.2f}")
-
-# Também funciona com explain
-detalhes = comp.explain(clean1, clean2, preprocess=False)
-```
-
-Funciona em **todos os métodos** de comparação:
-
-```python
-# Batch — 1 query × N candidatos já limpos
-resultados = comp.compare_batch(
-    "galaxy s22", candidatos_limpos,
-    top_n=10, min_cosine=0.1, preprocess=False,
-)
-
-# Multi-query — M queries × N candidatos já limpos
-todos = comp.compare_many_to_many(
-    queries_limpas, candidatos_limpos,
-    top_n=5, preprocess=False,
-)
-
-# Async
-resultados = await comp.compare_batch_async(
-    "galaxy s22", candidatos_limpos,
-    top_n=10, preprocess=False,
-)
-```
-
-> **Quando usar `preprocess=False`:**
-> - Dados vindos de pipelines ETL que já normalizam texto.
-> - Re-ranking de resultados já processados por outro sistema (ex: Elasticsearch, banco vetorial).
-> - Benchmarks onde você quer isolar o custo dos algoritmos de similaridade sem overhead do pipeline.
->
-> **Atenção:** Com `preprocess=False`, o cache in-memory **não é utilizado** (não há hash nem armazenamento), e nenhuma etapa do pipeline é executada — incluindo extração de entidades. Certifique-se de que seus textos estão no formato esperado pelos algoritmos.
 
 ---
 
@@ -920,6 +948,7 @@ Extratores disponíveis por padrão:
 | `number` | `3`, `três`, `1000` |
 | `product_model` | `S22 Ultra`, `iPhone 13`, `XJ-900`, `QS.250.08`, `QG.418.17` |
 
+---
 
 ## 🤝 Contribuindo
 

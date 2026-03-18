@@ -150,6 +150,10 @@ class RRFusion:
                     "candidate": candidate,
                     "score": normalized_score,
                     "fusion": "rrf",
+                    "ranking_summary": {
+                        algo: info["rank"]
+                        for algo, info in details.get(candidate, {}).items()
+                    },
                     "details": details.get(candidate, {}),
                 }
             )

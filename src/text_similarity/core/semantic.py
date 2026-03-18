@@ -94,8 +94,9 @@ class SemanticSimilarity(SimilarityAlgorithm):
 
             except ImportError as e:
                 raise ImportError(
-                    "A computação Semântica requer a lib `sentence-transformers`. "
-                    "Para instalá-la, rode: pip install text_similarity[semantic]"
+                    "SemanticSimilarity requer sentence-transformers. "
+                    "Instale com: pip install text-similarity-br[semantic]  "
+                    "ou: uv add text-similarity-br[semantic]"
                 ) from e
             except Exception as e:
                 raise StageProcessingError("SemanticSimilarity", e) from e

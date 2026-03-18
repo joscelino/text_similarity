@@ -7,10 +7,16 @@ para compatibilidade com ``ProcessPoolExecutor`` no Windows (spawn).
 
 from __future__ import annotations
 
+import hashlib
+import json
 import math
-from typing import Dict, List
+from pathlib import Path
+from typing import Dict, List, Union
 
+import joblib
 import numpy as np
+
+_INDEX_VERSION = "1.0"
 
 
 class BM25Index:
@@ -98,6 +104,73 @@ class BM25Index:
                 scores[i] += idf * numerator / denominator
 
         return scores
+
+    def save(self, path: Union[str, Path]) -> None:
+        """Serializa o índice BM25 para disco via joblib.
+
+        Args:
+            path: Caminho do arquivo de saída (ex: ``"idx.pkl"``).
+        """
+        data = {
+            "k1": self.k1,
+            "b": self.b,
+            "corpus_size": self._corpus_size,
+            "avgdl": self._avgdl,
+            "doc_freqs": self._doc_freqs,
+            "doc_lens": self._doc_lens,
+            "term_freqs": self._term_freqs,
+        }
+        integrity_hash = hashlib.sha256(
+            json.dumps(data, sort_keys=True, default=str).encode()
+        ).hexdigest()
+        payload = {
+            "version": _INDEX_VERSION,
+            "type": "BM25Index",
+            "data": data,
+            "integrity_hash": integrity_hash,
+        }
+        joblib.dump(payload, path)
+
+    @classmethod
+    def load(cls, path: Union[str, Path]) -> "BM25Index":
+        """Carrega e valida um índice BM25 do disco.
+
+        Args:
+            path: Caminho do arquivo gerado por ``save()``.
+
+        Returns:
+            Instância ``BM25Index`` pronta para uso.
+
+        Raises:
+            ValueError: Se a versão ou integridade não bater.
+        """
+        payload = joblib.load(path)
+        if payload.get("version") != _INDEX_VERSION:
+            raise ValueError(
+                f"Versão incompatível: esperada {_INDEX_VERSION!r}, "
+                f"encontrada {payload.get('version')!r}"
+            )
+        if payload.get("type") != "BM25Index":
+            raise ValueError(
+                f"Tipo inválido: esperado 'BM25Index', "
+                f"encontrado {payload.get('type')!r}"
+            )
+        data = payload["data"]
+        expected_hash = hashlib.sha256(
+            json.dumps(data, sort_keys=True, default=str).encode()
+        ).hexdigest()
+        if payload.get("integrity_hash") != expected_hash:
+            raise ValueError(
+                "Arquivo de índice corrompido (hash de integridade inválido)."
+            )
+
+        idx = cls(k1=data["k1"], b=data["b"])
+        idx._corpus_size = data["corpus_size"]
+        idx._avgdl = data["avgdl"]
+        idx._doc_freqs = data["doc_freqs"]
+        idx._doc_lens = data["doc_lens"]
+        idx._term_freqs = data["term_freqs"]
+        return idx
 
     def get_scores_normalized(self, query: str) -> np.ndarray:
         """Scores normalizados para ``[0, 1]`` via min-max scaling.

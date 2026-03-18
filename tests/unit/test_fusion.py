@@ -354,3 +354,65 @@ class TestRRFusionEdgeCases:
 
         scores = [r["score"] for r in result]
         assert scores == sorted(scores, reverse=True)
+
+
+class TestRRFusionRankingSummary:
+    """Testes do campo ranking_summary no output do RRF."""
+
+    def test_should_include_ranking_summary_in_rrf_output(self) -> None:
+        """Should include ranking_summary in rrf output."""
+        rrf = RRFusion(k=60)
+        rankings = [
+            [
+                {"candidate": "A", "score": 0.9},
+                {"candidate": "B", "score": 0.5},
+            ],
+            [
+                {"candidate": "B", "score": 0.8},
+                {"candidate": "A", "score": 0.4},
+            ],
+        ]
+        result = rrf.fuse(rankings, ["cosine", "edit"])
+
+        for item in result:
+            assert "ranking_summary" in item
+            summary = item["ranking_summary"]
+            assert "cosine" in summary
+            assert "edit" in summary
+            assert isinstance(summary["cosine"], int)
+            assert isinstance(summary["edit"], int)
+
+    def test_should_show_penalty_rank_in_summary_when_candidate_absent_from_ranking(
+        self,
+    ) -> None:
+        """Should show penalty rank in summary when candidate absent from ranking."""
+        rrf = RRFusion(k=60)
+        rankings = [
+            [
+                {"candidate": "A", "score": 0.9},
+                {"candidate": "B", "score": 0.5},
+            ],
+            [
+                {"candidate": "A", "score": 0.8},
+                # B ausente do segundo ranking
+            ],
+        ]
+        result = rrf.fuse(rankings, ["cosine", "edit"])
+
+        b_result = next(r for r in result if r["candidate"] == "B")
+        # B está presente em cosine (rank 2) mas ausente em edit (penalty rank 2)
+        assert b_result["ranking_summary"]["cosine"] == 2
+        assert b_result["ranking_summary"]["edit"] == 2  # penalty rank
+
+    def test_ranking_summary_ranks_match_details(self) -> None:
+        """ranking_summary deve ser subconjunto consistente de details."""
+        rrf = RRFusion(k=60)
+        rankings = [
+            [{"candidate": "A", "score": 0.9}],
+            [{"candidate": "A", "score": 0.7}],
+        ]
+        result = rrf.fuse(rankings, ["cosine", "edit"])
+
+        item = result[0]
+        for algo, rank in item["ranking_summary"].items():
+            assert rank == item["details"][algo]["rank"]

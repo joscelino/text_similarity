@@ -1,6 +1,8 @@
 """Testes unitários para o módulo BM25Index."""
 
 import pickle
+import tempfile
+from pathlib import Path
 
 import numpy as np
 import pytest
@@ -165,3 +167,64 @@ def test_bm25_empty_documents_in_corpus():
     assert len(scores) == 4
     assert scores[1] > 0  # "notebook dell" deve ter score positivo
     assert scores[0] == 0  # documento vazio deve ter score zero
+
+
+# --- Testes de serialização ---
+
+
+def test_should_save_and_load_bm25_index_with_same_scores():
+    """Should save and load bm25 index with same scores."""
+    corpus = ["notebook dell inspiron", "mouse logitech", "monitor samsung"]
+    idx = BM25Index(k1=1.5, b=0.5).fit(corpus)
+
+    with tempfile.TemporaryDirectory() as tmpdir:
+        path = Path(tmpdir) / "idx.pkl"
+        idx.save(path)
+        idx_loaded = BM25Index.load(path)
+
+    query = "notebook dell"
+    original_scores = idx.get_scores(query)
+    loaded_scores = idx_loaded.get_scores(query)
+
+    np.testing.assert_array_almost_equal(original_scores, loaded_scores)
+    assert idx_loaded.k1 == pytest.approx(1.5)
+    assert idx_loaded.b == pytest.approx(0.5)
+
+
+def test_should_reject_corrupted_index_file():
+    """Should reject corrupted index file."""
+    import joblib
+
+    corpus = ["notebook dell"]
+    idx = BM25Index().fit(corpus)
+
+    with tempfile.TemporaryDirectory() as tmpdir:
+        path = Path(tmpdir) / "idx.pkl"
+        idx.save(path)
+
+        # Corromper o hash de integridade
+        payload = joblib.load(path)
+        payload["integrity_hash"] = "hash_invalido"
+        joblib.dump(payload, path)
+
+        with pytest.raises(ValueError, match="corrompido"):
+            BM25Index.load(path)
+
+
+def test_should_reject_version_mismatch():
+    """Should reject version mismatch."""
+    import joblib
+
+    corpus = ["notebook dell"]
+    idx = BM25Index().fit(corpus)
+
+    with tempfile.TemporaryDirectory() as tmpdir:
+        path = Path(tmpdir) / "idx.pkl"
+        idx.save(path)
+
+        payload = joblib.load(path)
+        payload["version"] = "99.0"
+        joblib.dump(payload, path)
+
+        with pytest.raises(ValueError, match="Versão incompatível"):
+            BM25Index.load(path)

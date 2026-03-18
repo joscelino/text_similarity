@@ -37,6 +37,8 @@ class Comparator:
         bm25_k1: float = 1.2,
         bm25_b: float = 0.75,
         dense_model_name: str = ("paraphrase-multilingual-MiniLM-L12-v2"),
+        dense_precision: str = "float32",
+        parallel_threshold: int = 1000,
         **kwargs: Any,
     ) -> None:
         """Inicializa a classe Comparator preparando o pipeline.
@@ -64,6 +66,11 @@ class Comparator:
                 Ignorado quando ``indexing_strategy="tfidf"``.
             dense_model_name: Nome do modelo sentence-transformers.
                 Ignorado quando ``indexing_strategy`` não é ``"dense"``.
+            dense_precision: Precisão dos embeddings do DenseIndex.
+                ``"float32"`` (padrão), ``"int8"`` ou ``"binary"``.
+            parallel_threshold: Número mínimo de textos para ativar
+                pré-processamento paralelo em ``_process_batch``.
+                Padrão 1000.
             **kwargs: Argumentos arbitrários reservados para extensões futuras.
         """
         self.mode = mode
@@ -76,6 +83,9 @@ class Comparator:
         self.bm25_k1 = bm25_k1
         self.bm25_b = bm25_b
         self.dense_model_name = dense_model_name
+        self.dense_precision = dense_precision
+        self.parallel_threshold = parallel_threshold
+        self._active_index: "Any" = None
         self._rrf_fusion: RRFusion | None = (
             RRFusion(k=rrf_k, weights=rrf_weights) if fusion_strategy == "rrf" else None
         )
@@ -155,6 +165,8 @@ class Comparator:
         bm25_k1: float = 1.2,
         bm25_b: float = 0.75,
         dense_model_name: str = ("paraphrase-multilingual-MiniLM-L12-v2"),
+        dense_precision: str = "float32",
+        parallel_threshold: int = 1000,
     ) -> "Comparator":
         """Instancia um Comparator no modo inteligente.
 
@@ -180,6 +192,10 @@ class Comparator:
             bm25_b: Normalização por comprimento do BM25 (padrão 0.75).
             dense_model_name: Nome do modelo sentence-transformers
                 para ``indexing_strategy="dense"``.
+            dense_precision: Precisão dos embeddings do DenseIndex.
+                ``"float32"`` (padrão), ``"int8"`` ou ``"binary"``.
+            parallel_threshold: Número mínimo de textos para ativar
+                pré-processamento paralelo (padrão 1000).
         """
         return cls(
             mode="smart",
@@ -193,6 +209,8 @@ class Comparator:
             bm25_k1=bm25_k1,
             bm25_b=bm25_b,
             dense_model_name=dense_model_name,
+            dense_precision=dense_precision,
+            parallel_threshold=parallel_threshold,
         )
 
     def _process(self, text: str, preprocess: bool = True) -> str:
@@ -235,6 +253,49 @@ class Comparator:
         self._cache_store.clear()
         if self.cache is not None:
             self.cache.clear()
+
+    def save_index(self, path: "str | Any") -> None:
+        """Salva o índice ativo (BM25 ou Dense) em disco.
+
+        Persiste o índice construído pelo último ``compare_batch`` /
+        ``compare_many_to_many`` para reuso em sessões futuras via
+        ``load_index``.
+
+        Args:
+            path: Caminho do arquivo de saída (ex: ``"idx.pkl"``).
+
+        Raises:
+            RuntimeError: Se nenhum índice estiver disponível para salvar.
+        """
+        if self._active_index is None:
+            raise RuntimeError(
+                "Nenhum índice disponível. Execute compare_batch ou "
+                "compare_many_to_many primeiro para construir o índice."
+            )
+        self._active_index.save(path)
+
+    def load_index(self, path: "str | Any") -> None:
+        """Carrega um índice do disco substituindo o índice ativo.
+
+        Args:
+            path: Caminho do arquivo gerado por ``save_index()``.
+
+        Raises:
+            ValueError: Se o arquivo for inválido ou corrompido.
+        """
+        if self.indexing_strategy == "bm25":
+            from text_similarity.core.bm25 import BM25Index
+
+            self._active_index = BM25Index.load(path)
+        elif self.indexing_strategy == "dense":
+            from text_similarity.core.dense import DenseIndex
+
+            self._active_index = DenseIndex.load(path)
+        else:
+            raise RuntimeError(
+                "save_index/load_index suportados apenas para "
+                "indexing_strategy='bm25' ou 'dense'."
+            )
 
     def unload_embeddings_model(self) -> None:
         """Libera o modelo semântico (sentence-transformers) da memória global.
@@ -310,11 +371,12 @@ class Comparator:
         if not preprocess:
             return list(texts)
 
-        PARALLEL_THRESHOLD = 1000
-        if len(texts) > PARALLEL_THRESHOLD:
+        if len(texts) > self.parallel_threshold:
             from .pipeline.parallel_preprocess import run_parallel_preprocess
 
-            processed = run_parallel_preprocess(texts, self.mode, self._entity_names)
+            processed = run_parallel_preprocess(
+                texts, self.mode, self._entity_names, threshold=self.parallel_threshold
+            )
         else:
             processed = [self._process(text, preprocess=preprocess) for text in texts]
 
@@ -696,13 +758,26 @@ class Comparator:
         if self.indexing_strategy == "dense":
             from text_similarity.core.dense import DenseIndex
 
-            dense_index = DenseIndex(model_name=self.dense_model_name)
-            dense_index.fit(p_candidates)
+            # Reutiliza índice carregado via load_index (mesma sessão)
+            if isinstance(self._active_index, DenseIndex):
+                dense_index = self._active_index
+            else:
+                dense_index = DenseIndex(
+                    model_name=self.dense_model_name,
+                    precision=self.dense_precision,
+                )
+                dense_index.fit(p_candidates)
+                self._active_index = dense_index
         elif self.indexing_strategy == "bm25":
             from text_similarity.core.bm25 import BM25Index
 
-            bm25_index = BM25Index(k1=self.bm25_k1, b=self.bm25_b)
-            bm25_index.fit(p_candidates)
+            # Reutiliza índice carregado via load_index (mesma sessão)
+            if isinstance(self._active_index, BM25Index):
+                bm25_index = self._active_index
+            else:
+                bm25_index = BM25Index(k1=self.bm25_k1, b=self.bm25_b)
+                bm25_index.fit(p_candidates)
+                self._active_index = bm25_index
         else:
             from sklearn.feature_extraction.text import (
                 TfidfVectorizer,

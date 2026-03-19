@@ -28,7 +28,10 @@ def test_should_export_exceptions() -> None:
 
 def test_should_expose_version() -> None:
     assert hasattr(text_similarity, "__version__")
-    assert text_similarity.__version__ == "0.7.1"
+    # Versão sincronizada com pyproject.toml via importlib.metadata
+    from importlib.metadata import version
+
+    assert text_similarity.__version__ == version("text-similarity-br")
 
 
 def test_all_exports_are_importable() -> None:

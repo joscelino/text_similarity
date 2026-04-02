@@ -680,11 +680,15 @@ comp = Comparator.smart(
     indexing_strategy="bm25",
 )
 
-# Uso idêntico — toda a API funciona transparentemente
+# Uso idêntico — toda a API funciona transparentemente com BM25
 resultados = comp.compare_batch("samsung galaxy s22", candidatos, top_n=10)
 
-# Multi-query também suportado
+# Multi-query: índice BM25 construído uma única vez, reutilizado por todas as queries
 todos = comp.compare_many_to_many(buscas, candidatos, top_n=5)
+
+# Async (FastAPI, aiohttp, Starlette) — herda o indexing_strategy automaticamente
+resultados = await comp.compare_batch_async("samsung galaxy s22", candidatos, top_n=10)
+todos = await comp.compare_many_to_many_async(buscas, candidatos, top_n=5)
 ```
 
 Os parâmetros `bm25_k1` (saturação de frequência) e `bm25_b` (normalização por comprimento) podem ser ajustados para o seu domínio. Para produtos curtos (3-8 tokens), `bm25_k1=1.5` e `bm25_b=0.3` reduzem a penalização por comprimento:

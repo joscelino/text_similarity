@@ -653,8 +653,9 @@ class Comparator:
     ) -> List[dict[str, Any]]:
         """Compara um único texto contra uma lista de candidatos em lote.
 
-        Otimiza o processo computando a matriz TF-IDF de todos os elementos
-        (query + candidatos) de uma só vez, e extraindo os candidatos que passam
+        Otimiza o processo construindo o índice de todos os candidatos uma única
+        vez (TF-IDF, BM25 ou Dense, conforme ``indexing_strategy`` configurado
+        no :meth:`Comparator.smart`) e extraindo os candidatos que passam
         num limiar mínimo de cosseno (min_cosine) para só então aplicar
         as similaridades mais custosas (fonética, distância de edição).
 
@@ -708,16 +709,22 @@ class Comparator:
     ) -> List[List[dict[str, Any]]]:
         """Compara múltiplas queries contra uma lista de candidatos.
 
-        Otimiza cenários multi-query pré-computando a matriz TF-IDF dos
-        candidatos **uma única vez** e reutilizando-a para cada query.
-        Em cenários como 1.500 queries × 100k candidatos, isso elimina
-        o recálculo redundante do ``fit_transform`` a cada chamada.
+        Otimiza cenários multi-query pré-computando o índice dos candidatos
+        **uma única vez** e reutilizando-o para cada query. Em cenários como
+        1.500 queries × 100k candidatos, isso elimina o recálculo redundante
+        a cada chamada.
+
+        A estratégia de indexação (TF-IDF, BM25 ou Dense) é determinada pelo
+        parâmetro ``indexing_strategy`` configurado em :meth:`Comparator.smart`.
+        Por padrão usa TF-IDF; use ``indexing_strategy="bm25"`` para textos
+        curtos (produtos, SKUs) ou ``indexing_strategy="dense"`` para matching
+        semântico.
 
         O pipeline completo é:
 
         1. Pré-processamento em lote dos candidatos (com cache).
-        2. ``fit_transform`` do TF-IDF nos candidatos (uma vez).
-        3. Para cada query: ``transform`` + ``cosine_similarity``.
+        2. Construção do índice (TF-IDF / BM25 / Dense) nos candidatos (uma vez).
+        3. Para cada query: cálculo de scores via o índice escolhido.
         4. Filtragem por ``min_cosine`` e ``top_n``.
         5. Scoring híbrido (entity, edit, phonetic) nos top-N.
 
@@ -873,6 +880,10 @@ class Comparator:
         via ``loop.run_in_executor()``, mantendo o event loop livre
         para atender outras requisições concorrentes.
 
+        Herda a estratégia de indexação configurada no comparador
+        (TF-IDF, BM25 ou Dense). Para usar BM25, configure o comparador
+        com ``Comparator.smart(indexing_strategy="bm25")``.
+
         Ideal para integração com frameworks async como FastAPI,
         aiohttp e Starlette.
 
@@ -918,6 +929,10 @@ class Comparator:
 
         Offloads o trabalho CPU-bound para um ``ProcessPoolExecutor``
         via ``loop.run_in_executor()``, mantendo o event loop livre.
+
+        Herda a estratégia de indexação configurada no comparador
+        (TF-IDF, BM25 ou Dense). Para usar BM25, configure o comparador
+        com ``Comparator.smart(indexing_strategy="bm25")``.
 
         Args:
             queries: Lista de textos de busca.

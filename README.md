@@ -120,14 +120,14 @@ comp = Comparator.smart()
 
 novo_score = comp.compare("Foi me cobrado 30 reais", "O preço é R$ 30,00")
 
-print(f"Similaridade Smart: {novo_score:.2f}") 
+print(f"Similaridade Smart: {novo_score:.2f}")
 # Resultado alto por conta da identificação da entidade financeira exata
 
 # --- Interseção Perfeita de Modelos (Short-circuit) ---
 score_modelo = comp.compare("GN500", "Temos as peças GN 500, GN 1000 e SK 200")
 print(f"Score Modelo Embutido: {score_modelo:.2f}")
-# Resultado: ~0.95. Ao localizar o modelo procurado "GN500" isolado no meio do 
-# texto longo alvo, o algoritmo de intersecção assegura diretamente uma alta 
+# Resultado: ~0.95. Ao localizar o modelo procurado "GN500" isolado no meio do
+# texto longo alvo, o algoritmo de intersecção assegura diretamente uma alta
 # pontuação, ignorando todo o resto da string longa que causaria diluição.
 ```
 

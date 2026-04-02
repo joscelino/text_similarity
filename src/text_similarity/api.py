@@ -5,11 +5,12 @@ A interface central para comparação é através da classe `Comparator`.
 
 from __future__ import annotations
 
-from typing import Any, List, Literal
+from typing import Any, List, Literal, cast
 
 from text_similarity.core.base import SimilarityAlgorithm
 from text_similarity.core.fusion import RRFusion
 from text_similarity.core.hybrid import HybridSimilarity
+from text_similarity.core.semantic import SemanticSimilarity
 from text_similarity.pipeline.backends import (
     CleanTextStage,
     LemmatizeStage,
@@ -306,9 +307,10 @@ class Comparator:
 
         Não tem efeito se ``use_embeddings=False``.
         """
-        semantic = self.algorithm.algorithms.get("semantic")
-        if semantic is not None:
-            semantic.unload()
+        if isinstance(self.algorithm, HybridSimilarity):
+            semantic = self.algorithm.algorithms.get("semantic")
+            if isinstance(semantic, SemanticSimilarity):
+                semantic.unload()
 
     def preprocess_catalog(
         self,
@@ -796,7 +798,7 @@ class Comparator:
             # Extrair pesos do algoritmo para serialização
             alg_weights: dict[str, float] = {}
             if hasattr(self.algorithm, "weights"):
-                alg_weights = self.algorithm.weights  # type: ignore[union-attr]
+                alg_weights = self.algorithm.weights
 
             return run_parallel_queries(
                 queries=queries,
@@ -968,9 +970,9 @@ class Comparator:
         """
         column = df[col]
         if hasattr(column, "tolist"):  # pandas, cuDF, modin, numpy
-            return column.tolist()  # type: ignore[return-value]
+            return cast(List[str], column.tolist())
         if hasattr(column, "to_list"):  # polars, pyarrow
-            return column.to_list()  # type: ignore[return-value]
+            return cast(List[str], column.to_list())
         return list(column)  # fallback genérico
 
     def compare_dataframe(

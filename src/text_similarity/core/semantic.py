@@ -82,12 +82,10 @@ class SemanticSimilarity(SimilarityAlgorithm):
                 from sentence_transformers import SentenceTransformer
                 from sentence_transformers import util as st_util
 
-                # Configura um dictionary para passar device apenas se fornecido
-                kwargs = {}
-                if self.device:
-                    kwargs["device"] = self.device
-
-                _GLOBAL_MODEL = SentenceTransformer(self.model_name, **kwargs)
+                _GLOBAL_MODEL = SentenceTransformer(
+                    self.model_name,
+                    device=self.device if self.device else None,
+                )
                 _CURRENT_MODEL_NAME = self.model_name
                 _SENTENCE_UTIL = st_util
                 return _GLOBAL_MODEL

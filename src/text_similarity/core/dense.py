@@ -17,6 +17,7 @@ from pathlib import Path
 from typing import Any, List, Union
 
 import numpy as np
+from numpy.typing import NDArray
 
 logger = logging.getLogger(__name__)
 
@@ -114,7 +115,7 @@ class DenseIndex:
         self.model_name = model_name
         self.device = device
         self.precision = precision
-        self._embeddings: np.ndarray | None = None
+        self._embeddings: NDArray[Any] | None = None
         self.n_documents: int = 0
         self.embedding_dim: int = 0
 
@@ -128,7 +129,7 @@ class DenseIndex:
             Self para encadeamento.
         """
         model = _ensure_dense_model(self.model_name, self.device)
-        emb_f32: np.ndarray = model.encode(
+        emb_f32: NDArray[np.float32] = model.encode(
             documents,
             convert_to_numpy=True,
             show_progress_bar=False,
@@ -164,7 +165,7 @@ class DenseIndex:
 
         return self
 
-    def get_scores_normalized(self, query: str) -> np.ndarray:
+    def get_scores_normalized(self, query: str) -> NDArray[np.float32]:
         """Similaridade da query contra o corpus, normalizada em ``[0, 1]``.
 
         Args:
@@ -177,7 +178,7 @@ class DenseIndex:
             return np.array([], dtype=np.float32)
 
         model = _ensure_dense_model(self.model_name, self.device)
-        q_emb: np.ndarray = model.encode(
+        q_emb: NDArray[np.float32] = model.encode(
             [query],
             convert_to_numpy=True,
             show_progress_bar=False,
@@ -189,7 +190,7 @@ class DenseIndex:
             if q_norm > 1e-10:
                 q_emb = q_emb / q_norm
             scores = self._embeddings @ q_emb.flatten()
-            return np.clip(scores, 0.0, 1.0)
+            return np.asarray(np.clip(scores, 0.0, 1.0), dtype=np.float32)
 
         elif self.precision == "int8":
             # Dequantizar e computar cosseno
@@ -201,7 +202,7 @@ class DenseIndex:
             if q_norm > 1e-10:
                 q_emb = q_emb / q_norm
             scores = doc_norm @ q_emb.flatten()
-            return np.clip(scores.astype(np.float32), 0.0, 1.0)
+            return np.asarray(np.clip(scores, 0.0, 1.0), dtype=np.float32)
 
         else:  # binary
             # Similaridade Hamming via XOR + popcount
@@ -212,7 +213,7 @@ class DenseIndex:
             xor = np.bitwise_xor(emb_uint8, q_bits)
             hamming = np.unpackbits(xor, axis=1).sum(axis=1).astype(np.float32)
             similarity = 1.0 - hamming / max(n_bits, 1)
-            return np.clip(similarity, 0.0, 1.0)
+            return np.asarray(np.clip(similarity, 0.0, 1.0), dtype=np.float32)
 
     def save(self, path: Union[str, Path]) -> None:
         """Serializa o índice denso para disco via joblib.
@@ -269,7 +270,7 @@ class DenseIndex:
                 f"encontrado {payload.get('type')!r}"
             )
         data = payload["data"]
-        embeddings: np.ndarray | None = data.get("embeddings")
+        embeddings: NDArray[Any] | None = data.get("embeddings")
         embeddings_bytes = embeddings.tobytes() if embeddings is not None else b""
         expected_hash = hashlib.sha256(embeddings_bytes).hexdigest()
         if payload.get("integrity_hash") != expected_hash:

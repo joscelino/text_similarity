@@ -15,6 +15,7 @@ from typing import Dict, List, Union
 
 import joblib
 import numpy as np
+from numpy.typing import NDArray
 
 _INDEX_VERSION = "1.0"
 
@@ -75,7 +76,7 @@ class BM25Index:
         self._avgdl = total_len / max(self._corpus_size, 1)
         return self
 
-    def get_scores(self, query: str) -> np.ndarray:
+    def get_scores(self, query: str) -> NDArray[np.float64]:
         """Calcula scores BM25 do query contra todo o corpus.
 
         Args:
@@ -172,7 +173,7 @@ class BM25Index:
         idx._term_freqs = data["term_freqs"]
         return idx
 
-    def get_scores_normalized(self, query: str) -> np.ndarray:
+    def get_scores_normalized(self, query: str) -> NDArray[np.float32]:
         """Scores normalizados para ``[0, 1]`` via min-max scaling.
 
         Args:
@@ -184,5 +185,5 @@ class BM25Index:
         scores = self.get_scores(query)
         max_score = scores.max()
         if max_score > 0:
-            return scores / max_score
-        return scores
+            return np.asarray(scores / max_score, dtype=np.float32)
+        return np.asarray(scores, dtype=np.float32)

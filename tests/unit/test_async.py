@@ -145,6 +145,7 @@ class TestCompareManyToManyAsync:
         assert results[1] == []
 
     async def test_entity_short_circuit(self, smart_comp):
+
         queries = ["samsung s22 ultra"]
         candidates = [
             "Vende-se samsung galaxy s22 ultra na caixa",
@@ -164,3 +165,68 @@ class TestCompareManyToManyAsync:
         if "entity" in top_hit["details"]:
             assert top_hit["details"]["entity"]["score"] == 1.0
             assert top_hit["score"] == 0.95
+
+
+@pytest.mark.asyncio
+class TestBM25Async:
+    """Testes para métodos async com indexing_strategy='bm25'."""
+
+    @pytest.fixture
+    def bm25_comp(self):
+        return Comparator.smart(entities=["product_model"], indexing_strategy="bm25")
+
+    async def test_compare_batch_async_with_bm25(self, bm25_comp):
+        """compare_batch_async retorna resultados válidos com BM25."""
+        query = "notebook dell inspiron"
+        candidates = [
+            "notebook dell inspiron 15",
+            "mouse logitech wireless",
+            "teclado microsoft ergonômico",
+        ]
+
+        results = await bm25_comp.compare_batch_async(
+            query, candidates, top_n=3, min_cosine=0.0, n_workers=1
+        )
+
+        assert len(results) > 0
+        assert all("candidate" in r and "score" in r for r in results)
+        assert "inspiron" in results[0]["candidate"].lower()
+
+    async def test_compare_many_to_many_async_with_bm25(self, bm25_comp):
+        """compare_many_to_many_async retorna lista de listas válidas com BM25."""
+        queries = ["iPhone 13", "Galaxy S22"]
+        candidates = [
+            "celular iphone 13 novo",
+            "samsung galaxy s22 ultra",
+            "mesa de escritório",
+        ]
+
+        results = await bm25_comp.compare_many_to_many_async(
+            queries, candidates, top_n=3, min_cosine=0.0, n_workers=1
+        )
+
+        assert len(results) == 2
+        assert all(isinstance(r, list) for r in results)
+        assert len(results[0]) > 0
+        assert len(results[1]) > 0
+
+    async def test_async_bm25_matches_sync_bm25(self, bm25_comp):
+        """Resultado assíncrono com BM25 é idêntico ao síncrono."""
+        query = "arroz integral tipo 1"
+        candidates = [
+            "arroz integral tipo 1 pacote 5kg",
+            "feijão preto carioca",
+            "arroz parboilizado",
+        ]
+
+        sync_results = bm25_comp.compare_batch(
+            query, candidates, top_n=3, min_cosine=0.0, strategy="vectorized"
+        )
+        async_results = await bm25_comp.compare_batch_async(
+            query, candidates, top_n=3, min_cosine=0.0, n_workers=1
+        )
+
+        assert len(sync_results) == len(async_results)
+        for s, a in zip(sync_results, async_results):
+            assert s["candidate"] == a["candidate"]
+            assert abs(s["score"] - a["score"]) < 1e-6

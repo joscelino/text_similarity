@@ -6,7 +6,7 @@ import hashlib
 import pickle
 import tempfile
 from pathlib import Path
-from typing import List, Optional
+from typing import List, Optional, cast
 
 from joblib import Memory
 
@@ -79,7 +79,7 @@ class PipelineCache:
             with open(path, "rb") as f:
                 data = pickle.load(f)  # noqa: S301
             if data.get("catalog_hash") == catalog_hash:
-                return data["processed"]
+                return cast(List[str], data["processed"])
         except (pickle.UnpicklingError, KeyError, EOFError):
             pass
         return None

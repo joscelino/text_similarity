@@ -121,6 +121,115 @@ class TestCompareManyToManyShortCircuit:
             assert top_hit["score"] == 0.95
 
 
+class TestCompareManyToManyBM25:
+    """Testes para compare_many_to_many com indexing_strategy='bm25'."""
+
+    @pytest.fixture
+    def bm25_comp(self):
+        return Comparator.smart(entities=["product_model"], indexing_strategy="bm25")
+
+    def test_bm25_returns_results_for_multiple_queries(self, bm25_comp):
+        """BM25 retorna lista de listas válidas para N queries."""
+        queries = ["iPhone 13", "Galaxy S22"]
+        candidates = [
+            "celular iphone 13 novo",
+            "samsung galaxy s22 ultra",
+            "notebook dell inspiron",
+        ]
+
+        results = bm25_comp.compare_many_to_many(queries, candidates, min_cosine=0.0)
+
+        assert isinstance(results, list)
+        assert len(results) == 2
+        assert len(results[0]) > 0
+        assert len(results[1]) > 0
+        for item in results[0]:
+            assert "candidate" in item
+            assert "score" in item
+            assert "details" in item
+
+    def test_bm25_equivalence_with_batch(self, bm25_comp):
+        """many_to_many([q], cands) == batch(q, cands) com BM25."""
+        query = "notebook dell inspiron"
+        candidates = [
+            "notebook dell inspiron 15",
+            "mouse logitech wireless",
+            "teclado microsoft ergonômico",
+        ]
+
+        batch_results = bm25_comp.compare_batch(
+            query, candidates, top_n=3, min_cosine=0.0
+        )
+        many_results = bm25_comp.compare_many_to_many(
+            [query], candidates, top_n=3, min_cosine=0.0
+        )[0]
+
+        assert len(batch_results) == len(many_results)
+        for b, m in zip(batch_results, many_results):
+            assert b["candidate"] == m["candidate"]
+            assert abs(b["score"] - m["score"]) < 1e-6
+
+    def test_bm25_parallel_matches_vectorized(self, bm25_comp):
+        """BM25 com strategy='parallel' produz mesmos resultados que 'vectorized'."""
+        queries = ["arroz integral", "feijão preto"]
+        candidates = [
+            "arroz integral tipo 1",
+            "feijão preto carioca",
+            "macarrão parafuso",
+        ]
+
+        vectorized = bm25_comp.compare_many_to_many(
+            queries, candidates, top_n=3, min_cosine=0.0, strategy="vectorized"
+        )
+        parallel = bm25_comp.compare_many_to_many(
+            queries,
+            candidates,
+            top_n=3,
+            min_cosine=0.0,
+            strategy="parallel",
+            n_workers=1,
+        )
+
+        assert len(vectorized) == len(parallel)
+        for v_list, p_list in zip(vectorized, parallel):
+            assert len(v_list) == len(p_list)
+            for v, p in zip(v_list, p_list):
+                assert v["candidate"] == p["candidate"]
+                assert abs(v["score"] - p["score"]) < 1e-6
+
+    def test_bm25_custom_k1_b_params(self):
+        """many_to_many aceita bm25_k1 e bm25_b customizados sem erro."""
+        comp = Comparator.smart(
+            entities=["product_model"],
+            indexing_strategy="bm25",
+            bm25_k1=1.5,
+            bm25_b=0.3,
+        )
+        results = comp.compare_many_to_many(
+            ["notebook dell"],
+            ["notebook dell inspiron", "mouse"],
+            top_n=2,
+            min_cosine=0.0,
+        )
+        assert len(results) == 1
+        assert len(results[0]) > 0
+
+    def test_bm25_scores_ordered_descending(self, bm25_comp):
+        """Resultados com BM25 estão em ordem decrescente de score."""
+        queries = ["arroz integral"]
+        candidates = [
+            "arroz integral tipo 1",
+            "feijão preto",
+            "arroz parboilizado integral",
+            "macarrão",
+        ]
+
+        results = bm25_comp.compare_many_to_many(queries, candidates, min_cosine=0.0)
+
+        scores = [r["score"] for r in results[0]]
+        assert scores == sorted(scores, reverse=True)
+
+
 class TestCompareManyToManyEquivalence:
     """Garante que compare_many_to_many([q], cands) == compare_batch(q, cands)."""
 

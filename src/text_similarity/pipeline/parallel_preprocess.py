@@ -10,11 +10,11 @@ from __future__ import annotations
 import math
 import os
 from concurrent.futures import ProcessPoolExecutor
-from typing import List, Optional
+from typing import Any, List, Optional, Tuple
 
 
 def _preprocess_worker(
-    args: tuple,
+    args: Tuple[Any, ...],
 ) -> List[str]:
     """Worker top-level que recria pipeline local e processa chunk.
 

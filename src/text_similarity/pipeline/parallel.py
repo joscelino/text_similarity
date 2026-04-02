@@ -10,7 +10,7 @@ from __future__ import annotations
 import math
 import os
 from concurrent.futures import ProcessPoolExecutor
-from typing import Any, Dict, List, Optional, Tuple
+from typing import Any, Dict, List, Literal, Optional, Tuple
 
 
 def _worker_process_queries(
@@ -25,7 +25,7 @@ def _worker_process_queries(
         Dict[str, float],  # algorithm_weights
         int,  # top_n
         float,  # min_cosine
-        str,  # fusion_strategy
+        Literal["linear", "rrf"],  # fusion_strategy
         int,  # rrf_k
         Optional[Dict[str, float]],  # rrf_weights
         bool,  # preprocess
@@ -85,7 +85,7 @@ def _worker_process_queries(
 
     # Sobrescreve os pesos do algoritmo para manter consistência
     if hasattr(comp.algorithm, "weights"):
-        comp.algorithm.weights = algorithm_weights  # type: ignore[union-attr]
+        comp.algorithm.weights = algorithm_weights
 
     chunk_results: List[List[Dict[str, Any]]] = []
 
@@ -132,7 +132,7 @@ def run_parallel_queries(
     top_n: int,
     min_cosine: float,
     n_workers: Optional[int] = None,
-    fusion_strategy: str = "linear",
+    fusion_strategy: Literal["linear", "rrf"] = "linear",
     rrf_k: int = 60,
     rrf_weights: Optional[Dict[str, float]] = None,
     preprocess: bool = True,

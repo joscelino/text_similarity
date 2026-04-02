@@ -19,18 +19,73 @@ from text_similarity.api import Comparator
 def gerar_texto_sintetico(n_palavras: int = 8) -> str:
     """Gera uma frase sintética com palavras aleatórias."""
     palavras_base = [
-        "arroz", "feijão", "carne", "frango", "peixe", "legume",
-        "verdura", "fruta", "leite", "café", "açúcar", "sal",
-        "óleo", "manteiga", "pão", "queijo", "presunto", "ovo",
-        "macarrão", "molho", "farinha", "tempero", "alho", "cebola",
-        "tomate", "batata", "cenoura", "abobrinha", "berinjela",
-        "mesa", "cadeira", "sofá", "cama", "armário", "estante",
-        "televisão", "computador", "celular", "fone", "carregador",
-        "notebook", "tablet", "monitor", "teclado", "mouse",
-        "samsung", "apple", "dell", "lenovo", "motorola", "xiaomi",
-        "iphone", "galaxy", "redmi", "pixel", "ultra", "pro",
-        "novo", "usado", "seminovo", "original", "importado",
-        "comprar", "vender", "trocar", "alugar", "oferta",
+        "arroz",
+        "feijão",
+        "carne",
+        "frango",
+        "peixe",
+        "legume",
+        "verdura",
+        "fruta",
+        "leite",
+        "café",
+        "açúcar",
+        "sal",
+        "óleo",
+        "manteiga",
+        "pão",
+        "queijo",
+        "presunto",
+        "ovo",
+        "macarrão",
+        "molho",
+        "farinha",
+        "tempero",
+        "alho",
+        "cebola",
+        "tomate",
+        "batata",
+        "cenoura",
+        "abobrinha",
+        "berinjela",
+        "mesa",
+        "cadeira",
+        "sofá",
+        "cama",
+        "armário",
+        "estante",
+        "televisão",
+        "computador",
+        "celular",
+        "fone",
+        "carregador",
+        "notebook",
+        "tablet",
+        "monitor",
+        "teclado",
+        "mouse",
+        "samsung",
+        "apple",
+        "dell",
+        "lenovo",
+        "motorola",
+        "xiaomi",
+        "iphone",
+        "galaxy",
+        "redmi",
+        "pixel",
+        "ultra",
+        "pro",
+        "novo",
+        "usado",
+        "seminovo",
+        "original",
+        "importado",
+        "comprar",
+        "vender",
+        "trocar",
+        "alugar",
+        "oferta",
     ]
     return " ".join(random.choices(palavras_base, k=n_palavras))
 
@@ -46,14 +101,23 @@ def gerar_candidatos(n: int) -> List[str]:
 
 
 def benchmark(
-    comp: Comparator, queries: List[str], candidates: List[str],
-    strategy: str, top_n: int, min_cosine: float, n_workers: int | None = None,
+    comp: Comparator,
+    queries: List[str],
+    candidates: List[str],
+    strategy: str,
+    top_n: int,
+    min_cosine: float,
+    n_workers: int | None = None,
 ) -> float:
     """Mede tempo de execução de compare_many_to_many."""
     inicio = time.perf_counter()
     comp.compare_many_to_many(
-        queries, candidates, top_n=top_n, min_cosine=min_cosine,
-        strategy=strategy, n_workers=n_workers,
+        queries,
+        candidates,
+        top_n=top_n,
+        min_cosine=min_cosine,
+        strategy=strategy,
+        n_workers=n_workers,
     )
     return time.perf_counter() - inicio
 
@@ -91,14 +155,22 @@ def main() -> None:
 
         comp.clear_cache()
         t_vec = benchmark(
-            comp, queries, candidates,
-            strategy="vectorized", top_n=50, min_cosine=0.1,
+            comp,
+            queries,
+            candidates,
+            strategy="vectorized",
+            top_n=50,
+            min_cosine=0.1,
         )
 
         comp.clear_cache()
         t_par = benchmark(
-            comp, queries, candidates,
-            strategy="parallel", top_n=50, min_cosine=0.1,
+            comp,
+            queries,
+            candidates,
+            strategy="parallel",
+            top_n=50,
+            min_cosine=0.1,
         )
 
         speedup = t_vec / t_par if t_par > 0 else float("inf")

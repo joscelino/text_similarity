@@ -216,3 +216,5 @@ dist/
 .vscode/
 .claude/
 tests/assets/
+.lionclaw/
+.codegraph/

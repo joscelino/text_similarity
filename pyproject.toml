@@ -7,10 +7,10 @@ packages = ["src/text_similarity"]
 
 [project]
 name = "text-similarity-br"
-version = "0.8.1"
+version = "1.0.0"
 description = "Biblioteca Python para comparação de similaridade de textos em Português Brasileiro, com suporte a entidades numéricas, fonética PT-BR e pipeline de pré-processamento modular."
 readme = "README.md"
-requires-python = ">=3.8"
+requires-python = ">=3.9"
 license = { text = "MIT" }
 authors = [
     { name = "Joscelino", email = "joscelino.oliveira@gmail.com" },
@@ -31,7 +31,12 @@ classifiers = [
     "Intended Audience :: Science/Research",
     "License :: OSI Approved :: MIT License",
     "Natural Language :: Portuguese (Brazilian)",
-    "Programming Language :: Python :: 3.8",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.9",
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Programming Language :: Python :: 3.13",
     "Topic :: Scientific/Engineering :: Artificial Intelligence",
     "Topic :: Text Processing :: Linguistic",
     "Typing :: Typed",
@@ -61,11 +66,15 @@ semantic = [
 tuning = [
     "rich>=13.0.0",
 ]
+dev = [
+    "pandas-stubs>=2.0.0",
+]
 
 [dependency-groups]
 dev = [
     "mypy>=1.14.1",
     "pandas>=2.0.3",
+    "pandas-stubs>=2.0.0",
     "pre-commit>=3.5.0",
     "pytest>=8.3.5",
     "pytest-asyncio>=0.23.0",
@@ -88,7 +97,7 @@ pythonpath = [
 
 [tool.ruff]
 line-length = 88
-target-version = "py38"
+target-version = "py39"
 
 [tool.ruff.lint]
 select = ["E", "F", "W", "I", "D"]
@@ -100,7 +109,7 @@ convention = "google"
 "tests/**/*.py" = ["D1"]
 
 [tool.mypy]
-python_version = "3.8"
+python_version = "3.9"
 strict = true
 ignore_missing_imports = true
 

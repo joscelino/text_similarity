@@ -23,36 +23,43 @@ class Lemmatizer:
 
         # 1. Tentar spaCy (Requer: spacy e pt_core_news_sm)
         try:
-            import spacy  # pragma: no cover
+            import spacy
 
             # Tentar carregar o modelo PT
-            self._nlp = spacy.load("pt_core_news_sm")  # pragma: no cover
-            self.backend = "spacy"  # pragma: no cover
-            return  # pragma: no cover
-        except ImportError:
-            pass
-        except OSError:
+            self._nlp = spacy.load("pt_core_news_sm")
+            self.backend = "spacy"
+            logger.info("Backend de lematização selecionado: spacy")
+            return
+        except ImportError as e:
+            logger.debug("Backend spaCy indisponível: %s", e)
+        except OSError as e:
             # SpaCy instalado mas sem o modelo pt_core_news_sm baixado
-            pass
+            logger.debug(
+                "spaCy encontrado, mas modelo pt_core_news_sm não está baixado: %s. "
+                "Tente: python -m spacy download pt_core_news_sm",
+                e,
+            )
 
         # 2. Tentar NLTK Stemmer
         try:
-            from nltk.stem import RSLPStemmer  # pragma: no cover
+            from nltk.stem import RSLPStemmer
 
             # Tenta instanciar para ver se os dados estão baixados
             try:
-                self._stemmer = RSLPStemmer()  # pragma: no cover
-                self.backend = "nltk"  # pragma: no cover
-                return  # pragma: no cover
-            except LookupError:
+                self._stemmer = RSLPStemmer()
+                self.backend = "nltk"
+                logger.info("Backend de lematização selecionado: nltk")
+                return
+            except LookupError as e:
                 # Necessita: nltk.download('rslp') e nltk.download('punkt')
-                pass
-        except ImportError:
-            pass
+                logger.debug("Dados do NLTK não estão baixados: %s", e)
+        except ImportError as e:
+            logger.debug("Backend NLTK indisponível: %s", e)
 
         logger.warning(
             "Lemmatizer operando em modo pass-through (nenhum backend encontrado). "
-            "Para lematização real, instale o spaCy e o modelo pt_core_news_sm."
+            "Para lematização real, instale o spaCy e o modelo pt_core_news_sm "
+            "(python -m spacy download pt_core_news_sm)."
         )
 
     def lemmatize(self, tokens: list[str]) -> list[str]:

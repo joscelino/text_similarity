@@ -35,6 +35,10 @@ jobs:
       - name: Run Ruff Linter
         run: uv run ruff check src tests
 
-      # 6. Roda a suite integral de testes unitários
+      # 6. Roda o type checker strict (mypy)
+      - name: Run Mypy Strict
+        run: uv run mypy --strict src/
+
+      # 7. Roda a suite integral de testes unitários
       - name: Run Pytest
         run: uv run pytest tests/

@@ -11,6 +11,8 @@ import pytest
 
 from text_similarity.core.dense import DenseIndex
 
+HMAC_KEY = b"chave-dense-teste-32bytes-ok!"
+
 # --- Testes básicos do DenseIndex ---
 
 
@@ -176,27 +178,26 @@ def test_should_save_and_load_dense_index_with_same_scores():
 
 def test_should_reject_corrupted_index_file():
     """Should reject corrupted dense index file."""
-    import joblib
-
     corpus = ["notebook dell"]
     idx = DenseIndex().fit(corpus)
 
     with tempfile.TemporaryDirectory() as tmpdir:
         path = Path(tmpdir) / "dense_idx.pkl"
-        idx.save(path)
+        idx.save(path, hmac_key=HMAC_KEY)
 
-        payload = joblib.load(path)
-        payload["integrity_hash"] = "hash_invalido"
-        joblib.dump(payload, path)
+        # Adultera um byte no payload (após o header + '\n')
+        raw = bytearray(path.read_bytes())
+        nl = raw.index(b"\n")
+        target = nl + 50 if nl + 50 < len(raw) else len(raw) - 1
+        raw[target] ^= 0x01
+        path.write_bytes(bytes(raw))
 
-        with pytest.raises(ValueError, match="corrompido"):
-            DenseIndex.load(path)
+        with pytest.raises(ValueError, match="HMAC"):
+            DenseIndex.load(path, hmac_key=HMAC_KEY)
 
 
 def test_should_reject_version_mismatch():
     """Should reject dense index version mismatch."""
-    import joblib
-
     corpus = ["notebook dell"]
     idx = DenseIndex().fit(corpus)
 
@@ -204,11 +205,15 @@ def test_should_reject_version_mismatch():
         path = Path(tmpdir) / "dense_idx.pkl"
         idx.save(path)
 
-        payload = joblib.load(path)
-        payload["version"] = "99.0"
-        joblib.dump(payload, path)
+        # Adultera a versão no header JSON
+        raw = path.read_bytes()
+        nl = raw.index(b"\n")
+        header = (
+            raw[:nl].decode("utf-8").replace('"version": "2.0"', '"version": "99.0"')
+        )
+        path.write_bytes(header.encode("utf-8") + b"\n" + raw[nl + 1 :])
 
-        with pytest.raises(ValueError, match="Versão incompatível"):
+        with pytest.raises(ValueError, match="Versão.*incompatível"):
             DenseIndex.load(path)
 
 

@@ -431,25 +431,57 @@ class TestPreprocessBenchmarks:
 
     def test_preprocess_false_faster_than_true(self) -> None:
         """Confirma que preprocess=False é significativamente mais rápido."""
+        import gc
         import time
 
         comp = Comparator(mode="basic", use_cache=False)
 
-        text1 = "samsung galaxy s22 ultra 256gb preto novo lacrado"
-        text2 = "samsung galaxy s22 ultra 128gb branco seminovo"
-        n_runs = 200
+        # Textos longos em lote: com duas strings curtas o pre-processamento
+        # responde por apenas ~6% do tempo total (o resto e vetorizacao TF-IDF),
+        # margem menor que o ruido de medicao. Com textos longos em batch o
+        # pipeline domina e a diferenca sobe para ~50%.
+        query = (
+            "smartphone samsung galaxy s22 ultra 256gb na cor preto totalmente "
+            "novo e lacrado na caixa original, comprado por trinta mil reais em "
+            "12/03/2024, com tela de 6,8 polegadas, camera de 108 megapixels, "
+            "bateria de 5000mAh, garantia de 12 meses da fabrica"
+        ) * 3
+        candidate = (
+            "aparelho celular samsung galaxy s22 ultra 128gb branco seminovo em "
+            "otimo estado, adquirido por R$ 30.000,00 no dia 12 de marco de "
+            "2024, display de 6.8 pol, cameras de 108 MP, bateria 5000 mAh, "
+            "ainda com 6 meses de garantia"
+        ) * 3
+        candidates = [candidate] * 20
+        n_runs = 8
+        n_trials = 5
 
-        # Medir preprocess=True (pipeline completo a cada chamada, sem cache)
-        start = time.perf_counter()
-        for _ in range(n_runs):
-            comp.compare(text1, text2, preprocess=True)
-        time_with = time.perf_counter() - start
+        def run_block(preprocess: bool) -> float:
+            start = time.perf_counter()
+            for _ in range(n_runs):
+                comp.compare_batch(query, candidates, preprocess=preprocess)
+            return time.perf_counter() - start
 
-        # Medir preprocess=False (bypass direto)
-        start = time.perf_counter()
-        for _ in range(n_runs):
-            comp.compare(text1, text2, preprocess=False)
-        time_without = time.perf_counter() - start
+        # Aquecimento: tira imports tardios do pipeline da primeira medicao.
+        comp.compare_batch(query, candidates, preprocess=True)
+        comp.compare_batch(query, candidates, preprocess=False)
+
+        # Medicao robusta a ruido de escalonamento (CI compartilhada, GC,
+        # outros testes no mesmo processo):
+        #   - trials intercalados, para que qualquer deriva atinja os dois lados;
+        #   - menor tempo entre os trials, estimador padrao para microbenchmark;
+        #   - GC desligado, evitando que uma coleta caia so em um dos blocos.
+        gc_was_enabled = gc.isenabled()
+        gc.disable()
+        try:
+            time_with = float("inf")
+            time_without = float("inf")
+            for _ in range(n_trials):
+                time_with = min(time_with, run_block(preprocess=True))
+                time_without = min(time_without, run_block(preprocess=False))
+        finally:
+            if gc_was_enabled:
+                gc.enable()
 
         assert time_without < time_with, (
             f"preprocess=False ({time_without:.4f}s) deveria ser mais rápido "

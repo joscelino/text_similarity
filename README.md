@@ -3,7 +3,7 @@
 [![CI Pipeline](https://github.com/joscelino/text_similarity/actions/workflows/pipeline.yaml/badge.svg)](https://github.com/joscelino/text_similarity/actions/workflows/pipeline.yaml)
 [![Docs](https://readthedocs.org/projects/text-similarity/badge/?version=latest)](https://text-similarity.readthedocs.io/pt-br/latest/)
 [![PyPI](https://img.shields.io/pypi/v/text-similarity-br)](https://pypi.org/project/text-similarity-br/)
-[![Python](https://img.shields.io/badge/python-3.8%20|%203.9%20|%203.10%20|%203.11%20|%203.12-blue)](https://www.python.org)
+[![Python](https://img.shields.io/badge/python-3.9%20|%203.10%20|%203.11%20|%203.12-blue)](https://www.python.org)
 [![Ruff](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/astral-sh/ruff/main/assets/badge/v2.json)](https://github.com/astral-sh/ruff)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 
@@ -34,6 +34,8 @@
 - [🎯 Interpretação dos Scores](#-interpretação-dos-scores)
 - [📈 Calibração de Pesos (Grid Search)](#-calibração-de-pesos-grid-search)
 - [⚙️ Configuração do Cache](#️-configuração-do-cache)
+- [🔒 Security](#-security)
+  - [Upgrade guide](#upgrade-guide)
 - [🔌 Extensibilidade](#-extensibilidade--registrando-entidades-customizadas)
 - [🤝 Contribuindo](#-contribuindo)
 
@@ -62,7 +64,7 @@
 
 ## Requisitos
 
-- **Python:** >= 3.8
+- **Python:** >= 3.9
 - **Dependências principais:** `scikit-learn`, `rapidfuzz`, `sentence-transformers` (incluída desde a v0.4.0)
 - **Dependência opcional:** `spacy` + modelo `pt_core_news_sm` (para lematização)
 
@@ -907,6 +909,128 @@ comp.compare("produto A", "produto B")
 # Libera toda a memória do cache in-memory e limpa o cache em disco (Joblib)
 comp.clear_cache()
 ```
+
+---
+
+## 🔒 Security
+
+Esta seção resume as escolhas de segurança da biblioteca. Para a lista completa
+de mudanças, consulte as notas da release correspondente no GitHub.
+
+### Autenticação de índices com `hmac_key`
+
+`BM25Index` e `DenseIndex` usam o formato `tsbr-index-v2`, que inclui um
+cabeçalho JSON com metadados e um HMAC-SHA256 opcional. Ao salvar, forneça uma
+chave para garantir a integridade e autenticidade do arquivo em disco:
+
+```python
+from text_similarity.core.bm25 import BM25Index
+from text_similarity.core.dense import DenseIndex
+
+# Salvar com HMAC
+index.save("catalogo.tsbr-index", hmac_key=b"minha-chave-secreta-de-32bytes")
+
+# Carregar validando o HMAC
+index = BM25Index.load("catalogo.tsbr-index", hmac_key=b"minha-chave-secreta-de-32bytes")
+```
+
+> **Atenção:** quando `hmac_key` não é fornecido, o `integrity_hash` SHA-256
+> sem chave ainda protege contra corrupção acidental, mas **não** garante
+> autenticidade. Em produção, configure sempre uma chave secreta e armazene-a
+> em um gerenciador de secrets (ex: variável de ambiente, Vault, AWS Secrets
+> Manager).
+
+### Supply chain: fixar revisão do modelo
+
+Para ambientes de produção que exigem reprodutibilidade e controle sobre modelos
+do HuggingFace, a biblioteca permite fixar uma revisão específica do modelo de
+embeddings via `dense_model_revision`.
+
+Quando informado, o SHA é propagado como `revision=<sha>` para o
+`SentenceTransformer`, garantindo que o mesmo peso seja carregado em todas as
+réplicas e execuções. A chave de cache interna dos modelos inclui também o
+`device` e a `revision`, impedindo reuso incorreto entre configurações distintas.
+
+```python
+from text_similarity import Comparator
+
+# Pin de supply chain: carrega exatamente a revisão informada
+comp = Comparator.smart(
+    use_embeddings=True,
+    indexing_strategy="dense",
+    dense_model_name="sentence-transformers/paraphrase-multilingual-MiniLM-L12-v2",
+    dense_model_revision="a4b7c3d9e8f0123456789abcdef0123456789abcd",
+)
+```
+
+> **Segurança:** o parâmetro `dense_model_name` **não deve aceitar valores
+> fornecidos diretamente por usuários não confiáveis**. Quando exposto em APIs
+> ou interfaces, aplique uma whitelist de modelos permitidos na aplicação
+> hospedeira.
+
+> **Preferência por SafeTensors:** ao publicar ou versionar seus próprios
+> modelos, prefira o formato `safetensors` em detrimento de pickles arbitrários,
+> reduzindo a superfície de ataque de desserialização insegura.
+
+### Modo estrito do `SemanticSimilarity`
+
+A partir desta versão, `SemanticSimilarity` opera em modo estrito por padrão
+(`strict=True`). Falhas do backend (modelo ausente, OOM, erro de CUDA, etc.)
+são convertidas em `SemanticSimilarityError` em vez de retornarem silenciosamente
+`0.0` e envenenarem o ranking.
+
+```python
+from text_similarity import Comparator
+
+# Recomendado para produção: falhas são explícitas
+comp = Comparator.smart(use_embeddings=True, strict=True)
+
+# Fallback tolerante: falhas retornam 0.0 e o stacktrace vai para o log
+comp_tolerante = Comparator.smart(use_embeddings=True, strict=False)
+```
+
+Use `strict=True` sempre que a qualidade do ranking for crítica; use
+`strict=False` apenas em cenários de exploração onde um retorno parcial é
+aceitável.
+
+### Thread-safety do `Comparator`
+
+`Comparator` é thread-safe para uso concorrente. O cache in-memory é protegido
+por `threading.Lock()`, permitindo compartilhar a mesma instância entre threads
+de um `ThreadPoolExecutor` ou requisições concorrentes de um servidor web:
+
+```python
+from concurrent.futures import ThreadPoolExecutor
+from text_similarity import Comparator
+
+comp = Comparator.smart()
+
+with ThreadPoolExecutor(max_workers=4) as executor:
+    futuros = [
+        executor.submit(comp.compare, "iphone 13", "iphone 13 pro")
+        for _ in range(100)
+    ]
+    resultados = [f.result() for f in futuros]
+```
+
+### Upgrade guide
+
+Índices salvos em versões ≤ 0.8.x usam pickle/joblib e **não são carregados
+automaticamente** a partir desta versão. Migre para o formato seguro
+`tsbr-index-v2` com o utilitário CLI:
+
+```bash
+python -m text_similarity.tools.migrate_index \
+    legacy.pkl \
+    new.tsbr-index \
+    --i-accept-pickle-risk
+```
+
+O comando lê o arquivo legado, converte para o novo formato e opcionalmente
+aplica HMAC. Para aplicar autenticação, passe `--hmac-key` (ou use a API
+`BM25Index.save` / `DenseIndex.save` após a migração).
+
+Consulte as notas da release no GitHub para a lista completa de BREAKING CHANGES.
 
 ---
 

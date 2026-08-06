@@ -34,6 +34,26 @@ class PreprocessingPipeline:
         Cria um `PipelineContext` inicial e o passa por cada estágio,
         acumulando transformações e metadados ao longo do caminho.
 
+        Quando um estágio levanta uma exceção recuperável, ela é convertida
+        para `StageProcessingError`, preservando a causa original via
+        ``raise ... from e``. As seguintes exceções são tratadas:
+
+        - ``TypeError``, ``ValueError``: dados ou input inválido.
+        - ``KeyError``, ``AttributeError``, ``LookupError``: falhas de
+          acesso a dados, atributos ou recursos (dicionários, modelos,
+          datasets NLP ausentes).
+        - ``UnicodeDecodeError``, ``UnicodeEncodeError``: erros de encoding.
+        - ``OSError``: erros de I/O ou modelo não encontrado.
+        - ``RuntimeError``: runtime de backend NLP (ex: Regex, SpaCy).
+
+        As exceções abaixo NÃO são capturadas e propagam "bare", pois
+        representam condições críticas do ambiente de execução:
+
+        - ``KeyboardInterrupt``: interrupção explícita pelo usuário.
+        - ``SystemExit``: finalização solicitada pelo sistema.
+        - ``MemoryError``: esgotamento de memória; capturá-la poderia
+          mascarar falhas graves do ambiente.
+
         Args:
             text: Texto bruto de entrada.
 
@@ -50,6 +70,9 @@ class PreprocessingPipeline:
                 raise
             except (TypeError, ValueError) as e:
                 # Erro de dados/input inválido
+                raise StageProcessingError(stage.__class__.__name__, e) from e
+            except (KeyError, AttributeError, LookupError) as e:
+                # Falha de acesso a dados/atributos/recursos
                 raise StageProcessingError(stage.__class__.__name__, e) from e
             except (UnicodeDecodeError, UnicodeEncodeError) as e:
                 # Erro de encoding

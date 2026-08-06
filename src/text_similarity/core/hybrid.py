@@ -21,6 +21,10 @@ class HybridSimilarity(SimilarityAlgorithm):
         self,
         weights: dict[str, float] | None = None,
         target_entities: list[str] | None = None,
+        semantic_strict: bool = True,
+        semantic_model_name: str = "paraphrase-multilingual-MiniLM-L12-v2",
+        semantic_device: str | None = None,
+        semantic_revision: str | None = None,
     ) -> None:
         """Inicializa agregador de distâncias computacionais simultâneas.
 
@@ -32,6 +36,18 @@ class HybridSimilarity(SimilarityAlgorithm):
             target_entities: Lista de tipos de entidade para filtrar no
                 EntityIntersectionSimilarity (ex: ["productmodel"]).
                 Se None, considera qualquer tag no padrão <X:Y>.
+            semantic_strict: Propagado para :class:`SemanticSimilarity`
+                quando o algoritmo semântico é instanciado. ``True`` por
+                padrão (recomendado para produção). Ver
+                :class:`text_similarity.core.semantic.SemanticSimilarity`
+                para semântica dos modos.
+            semantic_model_name: Nome/path do modelo sentence-transformers
+                usado pelo algoritmo semântico quando ativado.
+            semantic_device: Dispositivo para o modelo semântico
+                (``"cpu"``, ``"cuda"`` etc). ``None`` usa detecção automática.
+            semantic_revision: Revisão (SHA) do modelo sentence-transformers
+                a ser carregada. Propagado como ``revision=<sha>`` para
+                ``SentenceTransformer``.
         """
         self.weights = weights or {
             "cosine": 0.35,
@@ -59,7 +75,12 @@ class HybridSimilarity(SimilarityAlgorithm):
         if self.weights.get("semantic", 0.0) > 0.0:
             from text_similarity.core.semantic import SemanticSimilarity
 
-            self.algorithms["semantic"] = SemanticSimilarity()
+            self.algorithms["semantic"] = SemanticSimilarity(
+                model_name=semantic_model_name,
+                device=semantic_device,
+                revision=semantic_revision,
+                strict=semantic_strict,
+            )
 
     def compare(self, text1: str, text2: str) -> float:
         """Soma iterativamente as ponderações de cada algoritmo.

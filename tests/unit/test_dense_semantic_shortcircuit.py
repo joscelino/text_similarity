@@ -47,15 +47,17 @@ def test_should_not_reuse_semantic_when_strategy_is_bm25() -> None:
     assert comp._reuse_semantic_from_dense is False
 
 
-def test_should_not_reuse_semantic_when_models_differ() -> None:
-    """_reuse_semantic_from_dense é False quando modelos são diferentes."""
+def test_should_reuse_semantic_when_dense_model_name_propagated() -> None:
+    """dense_model_name é propagado para SemanticSimilarity, mantendo reuso."""
     comp = Comparator.smart(
         indexing_strategy="dense",
         use_embeddings=True,
         dense_model_name=OTHER_MODEL,
     )
-    # SemanticSimilarity usa DEFAULT_MODEL, DenseIndex usa OTHER_MODEL
-    assert comp._reuse_semantic_from_dense is False
+    semantic_alg = comp.algorithm.algorithms.get("semantic")
+    assert semantic_alg is not None
+    assert getattr(semantic_alg, "model_name", None) == OTHER_MODEL
+    assert comp._reuse_semantic_from_dense is True
 
 
 def test_should_not_reuse_semantic_when_embeddings_disabled() -> None:

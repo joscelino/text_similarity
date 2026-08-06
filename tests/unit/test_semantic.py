@@ -45,11 +45,13 @@ def test_lazy_loading_isolation(monkeypatch):
 
     # Reseta o estado global se algum outro teste sujou
     sem_module._GLOBAL_MODEL = None
-    sem_module._CURRENT_MODEL_NAME = None
+    sem_module._CURRENT_MODEL_KEY = None
 
     # Inicializar a classe NÃO deve causar carregamento ou crashes
     algo = sem_module.SemanticSimilarity(model_name="invalid-model-name-1234")
-    assert algo._model_ref is None
+
+    # O modelo global ainda deve estar vazio (lazy loading)
+    assert sem_module._GLOBAL_MODEL is None
 
     # Tentar comparar algo real fará o gatilho, aí sim subindo a rede e falhando
     with pytest.raises(StageProcessingError):

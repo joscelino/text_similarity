@@ -10,14 +10,16 @@ from __future__ import annotations
 import hashlib
 import json
 import math
+import os
 from pathlib import Path
-from typing import Dict, List, Union
+from typing import Any, Dict, List, Union
 
-import joblib
 import numpy as np
 from numpy.typing import NDArray
 
-_INDEX_VERSION = "1.0"
+from text_similarity.core import _serialization
+
+INDEX_FORMAT_VERSION = _serialization.INDEX_FORMAT_VERSION
 
 
 class BM25Index:
@@ -106,11 +108,20 @@ class BM25Index:
 
         return scores
 
-    def save(self, path: Union[str, Path]) -> None:
-        """Serializa o índice BM25 para disco via joblib.
+    def save(
+        self,
+        path: Union[str, "os.PathLike[str]"],
+        *,
+        hmac_key: Union[bytes, str, None] = None,
+    ) -> None:
+        """Serializa o índice BM25 no formato ``tsbr-index-v2``.
 
         Args:
-            path: Caminho do arquivo de saída (ex: ``"idx.pkl"``).
+            path: Caminho do arquivo de saída (ex: ``"idx.tsbr-index"``).
+            hmac_key: Chave HMAC-SHA256 opcional (``bytes`` ou ``str``).
+                Se não fornecida, tenta a variável de ambiente
+                ``TSBR_HMAC_KEY``. Sem chave, o arquivo é gravado sem
+                autenticação e um aviso é emitido.
         """
         data = {
             "k1": self.k1,
@@ -122,47 +133,76 @@ class BM25Index:
             "term_freqs": self._term_freqs,
         }
         integrity_hash = hashlib.sha256(
-            json.dumps(data, sort_keys=True, default=str).encode()
+            json.dumps(data, sort_keys=True, default=str).encode("utf-8")
         ).hexdigest()
         payload = {
-            "version": _INDEX_VERSION,
             "type": "BM25Index",
+            "version": INDEX_FORMAT_VERSION,
             "data": data,
             "integrity_hash": integrity_hash,
         }
-        joblib.dump(payload, path)
+        _serialization.dump_index(payload, Path(path), hmac_key=hmac_key)
 
     @classmethod
-    def load(cls, path: Union[str, Path]) -> "BM25Index":
+    def load(
+        cls,
+        path: Union[str, "os.PathLike[str]"],
+        *,
+        hmac_key: Union[bytes, str, None] = None,
+        allow_legacy_pickle: bool = False,
+    ) -> "BM25Index":
         """Carrega e valida um índice BM25 do disco.
+
+        Suporta o formato seguro ``tsbr-index-v2`` (JSON + HMAC) e,
+        mediante opt-in explícito, arquivos legados em pickle/joblib.
 
         Args:
             path: Caminho do arquivo gerado por ``save()``.
+            hmac_key: Chave HMAC para validar autenticação. Se o arquivo
+                foi gravado sem HMAC, o load prossegue com aviso.
+            allow_legacy_pickle: Se ``True``, permite carregar arquivos
+                antigos em pickle/joblib, emitindo ``SecurityWarning``.
 
         Returns:
             Instância ``BM25Index`` pronta para uso.
 
         Raises:
-            ValueError: Se a versão ou integridade não bater.
+            ValueError: Se a versão, tipo, integridade ou HMAC não
+                baterem; ou se um arquivo legado for encontrado sem
+                ``allow_legacy_pickle=True``.
         """
-        payload = joblib.load(path)
-        if payload.get("version") != _INDEX_VERSION:
+        payload = _serialization.load_index(
+            Path(path),
+            hmac_key=hmac_key,
+            allow_legacy_pickle=allow_legacy_pickle,
+        )
+
+        def _validate_integrity(data: Dict[str, Any], stored_hash: str) -> None:
+            expected_hash = hashlib.sha256(
+                json.dumps(data, sort_keys=True, default=str).encode("utf-8")
+            ).hexdigest()
+            if stored_hash != expected_hash:
+                raise ValueError(
+                    "Arquivo de índice corrompido (hash de integridade inválido)."
+                )
+
+        # Formato legado (pickle/joblib) retorna o dict original.
+        if payload.get("version") == "1.0":
+            data = payload["data"]
+            _validate_integrity(data, payload.get("integrity_hash", ""))
+        elif payload.get("version") == INDEX_FORMAT_VERSION:
+            if payload.get("type") != "BM25Index":
+                raise ValueError(
+                    f"Tipo inválido: esperado 'BM25Index', "
+                    f"encontrado {payload.get('type')!r}"
+                )
+            data = payload["data"]
+            _validate_integrity(data, payload.get("integrity_hash", ""))
+        else:
             raise ValueError(
-                f"Versão incompatível: esperada {_INDEX_VERSION!r}, "
+                f"Versão incompatível: esperada "
+                f"{INDEX_FORMAT_VERSION!r} ou '1.0' (legado), "
                 f"encontrada {payload.get('version')!r}"
-            )
-        if payload.get("type") != "BM25Index":
-            raise ValueError(
-                f"Tipo inválido: esperado 'BM25Index', "
-                f"encontrado {payload.get('type')!r}"
-            )
-        data = payload["data"]
-        expected_hash = hashlib.sha256(
-            json.dumps(data, sort_keys=True, default=str).encode()
-        ).hexdigest()
-        if payload.get("integrity_hash") != expected_hash:
-            raise ValueError(
-                "Arquivo de índice corrompido (hash de integridade inválido)."
             )
 
         idx = cls(k1=data["k1"], b=data["b"])

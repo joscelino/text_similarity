@@ -10,7 +10,13 @@ from __future__ import annotations
 import math
 import os
 from concurrent.futures import ProcessPoolExecutor
-from typing import Any, Dict, List, Literal, Optional, Tuple
+from typing import TYPE_CHECKING, Any, Dict, List, Literal, Optional, Tuple
+
+if TYPE_CHECKING:
+    from scipy.sparse import csr_matrix
+    from sklearn.feature_extraction.text import TfidfVectorizer
+
+    from text_similarity.core._index_protocol import _CosineIndex
 
 
 def _worker_process_queries(
@@ -18,8 +24,8 @@ def _worker_process_queries(
         List[str],  # chunk_queries
         List[str],  # candidates (originais)
         List[str],  # p_candidates (pré-processados)
-        Any,  # cand_matrix (scipy sparse) ou None
-        Any,  # vectorizer (TfidfVectorizer) ou None
+        Optional["csr_matrix"],  # cand_matrix (scipy sparse) ou None
+        Optional["TfidfVectorizer"],  # vectorizer (TfidfVectorizer) ou None
         str,  # mode
         Optional[List[str]],  # entities
         Dict[str, float],  # algorithm_weights
@@ -30,9 +36,10 @@ def _worker_process_queries(
         Optional[Dict[str, float]],  # rrf_weights
         bool,  # preprocess
         str,  # indexing_strategy
-        Any,  # bm25_index (BM25Index) ou None
-        Any,  # dense_index (DenseIndex) ou None
+        Optional["_CosineIndex"],  # bm25_index (BM25Index) ou None
+        Optional["_CosineIndex"],  # dense_index (DenseIndex) ou None
         str,  # dense_model_name
+        Optional[str],  # dense_model_revision
     ],
 ) -> List[List[Dict[str, Any]]]:
     """Worker function executada em cada processo filho.
@@ -65,6 +72,7 @@ def _worker_process_queries(
         bm25_index,
         dense_index,
         dense_model_name,
+        dense_model_revision,
     ) = args
 
     from text_similarity.api import Comparator
@@ -81,6 +89,8 @@ def _worker_process_queries(
         fusion_strategy=fusion_strategy,
         rrf_k=rrf_k,
         rrf_weights=rrf_weights,
+        dense_model_name=dense_model_name,
+        dense_model_revision=dense_model_revision,
     )
 
     # Sobrescreve os pesos do algoritmo para manter consistência
@@ -94,10 +104,23 @@ def _worker_process_queries(
 
         try:
             if indexing_strategy == "dense":
+                if dense_index is None:
+                    raise ValueError(
+                        "dense_index é obrigatório para indexing_strategy='dense'"
+                    )
                 cosine_scores = dense_index.get_scores_normalized(p_query)
             elif indexing_strategy == "bm25":
+                if bm25_index is None:
+                    raise ValueError(
+                        "bm25_index é obrigatório para indexing_strategy='bm25'"
+                    )
                 cosine_scores = bm25_index.get_scores_normalized(p_query)
             else:
+                if vectorizer is None or cand_matrix is None:
+                    raise ValueError(
+                        "vectorizer e cand_matrix são obrigatórios para "
+                        "indexing_strategy='tfidf'"
+                    )
                 from sklearn.metrics.pairwise import (
                     cosine_similarity as sklearn_cosine_similarity,
                 )
@@ -124,8 +147,8 @@ def run_parallel_queries(
     queries: List[str],
     candidates: List[str],
     p_candidates: List[str],
-    cand_matrix: Any,
-    vectorizer: Any,
+    cand_matrix: Optional["csr_matrix"],
+    vectorizer: Optional["TfidfVectorizer"],
     mode: str,
     entities: Optional[List[str]],
     algorithm_weights: Dict[str, float],
@@ -137,9 +160,10 @@ def run_parallel_queries(
     rrf_weights: Optional[Dict[str, float]] = None,
     preprocess: bool = True,
     indexing_strategy: str = "tfidf",
-    bm25_index: Any = None,
-    dense_index: Any = None,
+    bm25_index: Optional["_CosineIndex"] = None,
+    dense_index: Optional["_CosineIndex"] = None,
     dense_model_name: str = ("paraphrase-multilingual-MiniLM-L12-v2"),
+    dense_model_revision: Optional[str] = None,
 ) -> List[List[Dict[str, Any]]]:
     """Orquestra a execução paralela via ProcessPoolExecutor.
 
@@ -169,6 +193,7 @@ def run_parallel_queries(
         bm25_index: ``BM25Index`` já ajustada (pickle-safe).
         dense_index: ``DenseIndex`` já ajustado (pickle-safe).
         dense_model_name: Nome do modelo sentence-transformers.
+        dense_model_revision: Revisão (SHA) do modelo sentence-transformers.
 
     Returns:
         Lista de listas de resultados — uma para cada query,
@@ -202,6 +227,7 @@ def run_parallel_queries(
                 bm25_index,
                 dense_index,
                 dense_model_name,
+                dense_model_revision,
             )
         )
 
@@ -230,6 +256,7 @@ def run_parallel_queries(
             bm25_index,
             dense_index,
             dense_model_name,
+            dense_model_revision,
         )
         for chunk in chunks
     ]

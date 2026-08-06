@@ -3,12 +3,15 @@
 from __future__ import annotations
 
 import hashlib
-import pickle
+import json
 import tempfile
+import warnings
 from pathlib import Path
 from typing import List, Optional, cast
 
 from joblib import Memory
+
+from text_similarity.core._serialization import SecurityWarning
 
 
 class PipelineCache:
@@ -45,6 +48,9 @@ class PipelineCache:
     ) -> None:
         """Salva candidatos processados em disco com hash de integridade.
 
+        O arquivo é gravado em JSON UTF-8 (sem pickle) para mitigar riscos
+        de desserialização insegura.
+
         Args:
             candidates: Lista de textos originais dos candidatos.
             processed: Lista de textos já pré-processados.
@@ -52,17 +58,28 @@ class PipelineCache:
         """
         catalog_hash = hashlib.sha256("\n".join(candidates).encode("utf-8")).hexdigest()
         data = {
-            "version": "1.0",
+            "version": "2.0",
             "catalog_hash": catalog_hash,
             "processed": processed,
         }
-        with open(Path(cache_path), "wb") as f:
-            pickle.dump(data, f, protocol=pickle.HIGHEST_PROTOCOL)
+        with open(Path(cache_path), "w", encoding="utf-8") as f:
+            json.dump(data, f, ensure_ascii=False, sort_keys=True)
+
+    @staticmethod
+    def _looks_like_pickle(data: bytes) -> bool:
+        """Heurística: arquivos pickle/joblib não começam com '{'."""
+        if not data:
+            return False
+        return not data.lstrip().startswith(b"{")
 
     def load_catalog(
         self, candidates: List[str], cache_path: str
     ) -> Optional[List[str]]:
         """Carrega candidatos do disco se hash bater.
+
+        Arquivos em formato legado (pickle/joblib) são detectados, ignorados
+        e um ``SecurityWarning`` é emitido; o caller deve reprocessar o
+        catálogo.
 
         Args:
             candidates: Lista de textos originais para validar integridade.
@@ -76,12 +93,20 @@ class PipelineCache:
             return None
         catalog_hash = hashlib.sha256("\n".join(candidates).encode("utf-8")).hexdigest()
         try:
-            with open(path, "rb") as f:
-                data = pickle.load(f)  # noqa: S301
+            raw = path.read_bytes()
+            if self._looks_like_pickle(raw):
+                warnings.warn(
+                    "Cache legado em pickle detectado e ignorado. "
+                    "Apague o arquivo para reprocessar em formato JSON.",
+                    SecurityWarning,
+                    stacklevel=2,
+                )
+                return None
+            data = json.loads(raw.decode("utf-8"))
             if data.get("catalog_hash") == catalog_hash:
                 return cast(List[str], data["processed"])
-        except (pickle.UnpicklingError, KeyError, EOFError):
-            pass
+        except (json.JSONDecodeError, KeyError, EOFError):
+            raise ValueError(f"Arquivo de cache não é JSON válido: {path}")
         return None
 
     def clear(self) -> None:

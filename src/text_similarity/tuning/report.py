@@ -1,5 +1,14 @@
-"""Relatório e visualização dos resultados da calibração."""
+"""Relatório e visualização dos resultados da calibração.
 
+SEC-STD-004: substituiu chamadas de exibição no terminal por
+``logger.info()`` para permitir integração com o pipeline padrão de
+logging (handlers, formatters, níveis) e facilitar captura em testes via
+``caplog``. Sequências de escape representando nova linha (que antes
+surgiam como texto literal) foram corrigidas para quebras de linha
+reais.
+"""
+
+import logging
 from typing import Any, Dict, List
 
 try:
@@ -10,6 +19,8 @@ try:
     HAS_RICH = True
 except ImportError:
     HAS_RICH = False
+
+logger = logging.getLogger(__name__)
 
 
 class CalibrationReport:
@@ -39,18 +50,18 @@ class CalibrationReport:
 
     def _print_fallback_table(self) -> None:
         """Fallback markdown se a library `rich` não estiver instalada."""
-        print("\\n=== Dashboard de Calibração (Fallback) ===")
-        print(f"🏆 Melhor Configuração: {self.best_weights}")
+        logger.info("=== Dashboard de Calibração (Fallback) ===")
+        logger.info("🏆 Melhor Configuração: %s", self.best_weights)
         f1 = self.best_metrics.get("f1_score", 0)
         t = self.best_metrics.get("total_time_ms", 0)
-        print(f"Resultados: F1-Score: {f1:.3f} | Tempo: {t:.1f}ms")
+        logger.info("Resultados: F1-Score: %.3f | Tempo: %.1fms", f1, t)
 
-        print("\\n--- Histórico de Custo-Benefício ---")
+        logger.info("--- Histórico de Custo-Benefício ---")
         for res in self.all_results:
             w = res["weights"]
             f1 = res["metrics"].get("f1_score", 0)
             t = res["metrics"].get("total_time_ms", 0)
-            print(f"Pesos: {w} -> F1: {f1:.3f} | Tempo: {t:.1f}ms")
+            logger.info("Pesos: %s -> F1: %.3f | Tempo: %.1fms", w, f1, t)
 
     def show_time_profiling(self) -> None:
         """Exibe o comparativo de ganho de precisão vs custo de tempo."""
@@ -86,13 +97,15 @@ class CalibrationReport:
     def show_worst_errors(self) -> None:
         """Análise automatizada apontando o ofensor da discrepância."""
         if not self.worst_errors:
-            print("\\nNenhum erro falso negativo detectado na melhor configuração! 🎉")
+            logger.info(
+                "Nenhum erro falso negativo detectado na melhor configuração! 🎉"
+            )
             return
 
         if HAS_RICH:
             console = Console()
             msg_hdr = (
-                "\\n[bold red]🚨 Análise de Discrepância (Falsos Negativos)[/bold red]"
+                "\n[bold red]🚨 Análise de Discrepância (Falsos Negativos)[/bold red]"
             )
             console.print(msg_hdr)
             for err in self.worst_errors:
@@ -116,9 +129,9 @@ class CalibrationReport:
                         offender = alg_name
 
                 msg = (
-                    f"[yellow]Query:[/yellow] {q}\\n"
-                    f"[yellow]Target:[/yellow] {t}\\n"
-                    f"[white]Score Final:[/white] {score:.3f} (Puxado para baixo)\\n"
+                    f"[yellow]Query:[/yellow] {q}\n"
+                    f"[yellow]Target:[/yellow] {t}\n"
+                    f"[white]Score Final:[/white] {score:.3f} (Puxado para baixo)\n"
                 )
                 if offender:
                     msg += (
@@ -130,11 +143,11 @@ class CalibrationReport:
                     Panel(msg, title="Falso Negativo Detalhado", expand=False)
                 )
         else:
-            print("\\n=== Análise de Discrepância (Falsos Negativos) ===")
+            logger.info("=== Análise de Discrepância (Falsos Negativos) ===")
             for err in self.worst_errors[:5]:
                 q, t = err["query"], err["target"]
                 score = err["predicted_score"]
-                print(f"\\nQuery: {q}\\nTarget: {t}\\nScore: {score:.3f}")
+                logger.info("Query: %s | Target: %s | Score: %.3f", q, t, score)
 
                 details = err["explain"].get("details", {})
                 offender = None
@@ -146,8 +159,10 @@ class CalibrationReport:
                             offender = alg_name
 
                 if offender:
-                    print(
-                        f"  -> OFENSOR: '{offender}' marcou apenas {lowest_score:.2f}"
+                    logger.info(
+                        "  -> OFENSOR: '%s' marcou apenas %.2f",
+                        offender,
+                        lowest_score,
                     )
 
     def summary(self) -> None:

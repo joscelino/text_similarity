@@ -1,13 +1,34 @@
 """Testes unitários para o módulo BM25Index."""
 
+import json
 import pickle
 import tempfile
 from pathlib import Path
+from typing import Any, Dict
 
 import numpy as np
 import pytest
 
 from text_similarity.core.bm25 import BM25Index
+
+
+def _read_payload(path: Path) -> Dict[str, Any]:
+    """Lê o payload JSON de um arquivo ``tsbr-index-v2`` (sem validar HMAC)."""
+    raw = path.read_bytes()
+    nl = raw.index(b"\n")
+    return json.loads(raw[nl + 1 :].decode("utf-8"))
+
+
+def _write_payload(path: Path, payload: Dict[str, Any]) -> None:
+    """Regrava arquivo ``tsbr-index-v2`` preservando o header original."""
+    raw = path.read_bytes()
+    nl = raw.index(b"\n")
+    header = raw[:nl]
+    new_payload = json.dumps(payload, sort_keys=True, ensure_ascii=False).encode(
+        "utf-8"
+    )
+    path.write_bytes(header + b"\n" + new_payload)
+
 
 # --- Testes básicos do BM25Index ---
 
@@ -193,8 +214,6 @@ def test_should_save_and_load_bm25_index_with_same_scores():
 
 def test_should_reject_corrupted_index_file():
     """Should reject corrupted index file."""
-    import joblib
-
     corpus = ["notebook dell"]
     idx = BM25Index().fit(corpus)
 
@@ -203,9 +222,9 @@ def test_should_reject_corrupted_index_file():
         idx.save(path)
 
         # Corromper o hash de integridade
-        payload = joblib.load(path)
+        payload = _read_payload(path)
         payload["integrity_hash"] = "hash_invalido"
-        joblib.dump(payload, path)
+        _write_payload(path, payload)
 
         with pytest.raises(ValueError, match="corrompido"):
             BM25Index.load(path)
@@ -213,8 +232,6 @@ def test_should_reject_corrupted_index_file():
 
 def test_should_reject_version_mismatch():
     """Should reject version mismatch."""
-    import joblib
-
     corpus = ["notebook dell"]
     idx = BM25Index().fit(corpus)
 
@@ -222,9 +239,9 @@ def test_should_reject_version_mismatch():
         path = Path(tmpdir) / "idx.pkl"
         idx.save(path)
 
-        payload = joblib.load(path)
+        payload = _read_payload(path)
         payload["version"] = "99.0"
-        joblib.dump(payload, path)
+        _write_payload(path, payload)
 
         with pytest.raises(ValueError, match="Versão incompatível"):
             BM25Index.load(path)

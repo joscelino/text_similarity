@@ -10,14 +10,18 @@ arrays numpy, sem referências ao modelo de embedding.
 
 from __future__ import annotations
 
-import hashlib
+import io
+import json
 import logging
+import os
 import threading
 from pathlib import Path
-from typing import Any, List, Union
+from typing import Any, Dict, List, Union
 
 import numpy as np
 from numpy.typing import NDArray
+
+from text_similarity.core import _serialization
 
 logger = logging.getLogger(__name__)
 
@@ -25,40 +29,48 @@ logger = logging.getLogger(__name__)
 # O modelo NÃO é armazenado na instância (não é pickle-safe).
 # Workers recriam o modelo localmente via este cache global.
 _DENSE_MODEL: Any = None
-_DENSE_MODEL_NAME: str | None = None
+_DENSE_MODEL_KEY: tuple[str, str | None, str | None] | None = None
 _DENSE_LOCK = threading.Lock()
 
-_INDEX_VERSION = "1.0"
+INDEX_FORMAT_VERSION = _serialization.INDEX_FORMAT_VERSION
 
 
 def _ensure_dense_model(
     model_name: str,
     device: str | None = None,
+    revision: str | None = None,
 ) -> Any:
     """Carrega o modelo de embedding globalmente (lazy, thread-safe).
 
     Utiliza Double-Checked Locking para evitar contenção após
-    a primeira carga.
+    a primeira carga. A chave de cache inclui ``model_name``, ``device``
+    e ``revision`` para evitar reuso incorreto quando algum desses
+    parâmetros muda (SEC-LOGIC-005).
 
     Args:
         model_name: Nome/path do modelo no HuggingFace.
         device: Dispositivo ('cpu', 'cuda', etc). Se None, auto.
+        revision: Revisão (SHA) do modelo. Se None, usa a revisão padrão.
 
     Returns:
         Instância de ``SentenceTransformer`` carregada.
     """
-    global _DENSE_MODEL, _DENSE_MODEL_NAME
+    global _DENSE_MODEL, _DENSE_MODEL_KEY
 
-    if _DENSE_MODEL is not None and _DENSE_MODEL_NAME == model_name:
+    model_key = (model_name, device, revision)
+
+    if _DENSE_MODEL is not None and _DENSE_MODEL_KEY == model_key:
         return _DENSE_MODEL
 
     with _DENSE_LOCK:
-        if _DENSE_MODEL is not None and _DENSE_MODEL_NAME == model_name:
+        if _DENSE_MODEL is not None and _DENSE_MODEL_KEY == model_key:
             return _DENSE_MODEL
 
         logger.info(
-            "Carregando modelo denso para indexação: %s",
+            "Carregando modelo denso para indexação: %s (device=%s, revision=%s)",
             model_name,
+            device,
+            revision,
         )
         try:
             from sentence_transformers import SentenceTransformer
@@ -66,16 +78,16 @@ def _ensure_dense_model(
             kwargs: dict[str, Any] = {}
             if device:
                 kwargs["device"] = device
+            if revision:
+                kwargs["revision"] = revision
 
             _DENSE_MODEL = SentenceTransformer(model_name, **kwargs)
-            _DENSE_MODEL_NAME = model_name
+            _DENSE_MODEL_KEY = model_key
             return _DENSE_MODEL
 
         except ImportError as e:
             raise ImportError(
-                "DenseIndex requer sentence-transformers. "
-                "Instale com: pip install text-similarity-br[semantic]  "
-                "ou: uv add text-similarity-br[semantic]"
+                _serialization.sentence_transformers_install_hint("DenseIndex")
             ) from e
 
 
@@ -94,6 +106,8 @@ class DenseIndex:
         model_name: Nome/path do modelo no HuggingFace.
             Padrão: modelo multilíngue leve com suporte a PT-BR.
         device: Dispositivo ('cpu', 'cuda', etc). Se None, auto.
+        revision: Revisão (SHA) do modelo. Se informado, propagado como
+            ``revision=<sha>`` para ``SentenceTransformer``.
         precision: Precisão dos embeddings armazenados.
             ``"float32"`` (padrão) — qualidade máxima, ~4 bytes/dim.
             ``"int8"`` — quantização escalar, ~1 byte/dim (~75% menor).
@@ -104,6 +118,7 @@ class DenseIndex:
         self,
         model_name: str = ("paraphrase-multilingual-MiniLM-L12-v2"),
         device: str | None = None,
+        revision: str | None = None,
         precision: str = "float32",
     ) -> None:
         """Configura identificação do modelo de embedding."""
@@ -114,6 +129,7 @@ class DenseIndex:
             )
         self.model_name = model_name
         self.device = device
+        self.revision = revision
         self.precision = precision
         self._embeddings: NDArray[Any] | None = None
         self.n_documents: int = 0
@@ -128,7 +144,7 @@ class DenseIndex:
         Returns:
             Self para encadeamento.
         """
-        model = _ensure_dense_model(self.model_name, self.device)
+        model = _ensure_dense_model(self.model_name, self.device, self.revision)
         emb_f32: NDArray[np.float32] = model.encode(
             documents,
             convert_to_numpy=True,
@@ -177,7 +193,7 @@ class DenseIndex:
         if self._embeddings is None:
             return np.array([], dtype=np.float32)
 
-        model = _ensure_dense_model(self.model_name, self.device)
+        model = _ensure_dense_model(self.model_name, self.device, self.revision)
         q_emb: NDArray[np.float32] = model.encode(
             [query],
             convert_to_numpy=True,
@@ -215,75 +231,123 @@ class DenseIndex:
             similarity = 1.0 - hamming / max(n_bits, 1)
             return np.asarray(np.clip(similarity, 0.0, 1.0), dtype=np.float32)
 
-    def save(self, path: Union[str, Path]) -> None:
-        """Serializa o índice denso para disco via joblib.
+    def save(
+        self,
+        path: Union[str, "os.PathLike[str]"],
+        *,
+        hmac_key: Union[bytes, str, None] = None,
+    ) -> None:
+        """Serializa o índice denso no formato ``tsbr-index-v2`` (NPZ + HMAC).
 
         Args:
-            path: Caminho do arquivo de saída (ex: ``"idx.pkl"``).
+            path: Caminho do arquivo de saída (ex: ``"dense.tsbr-index"``).
+            hmac_key: Chave HMAC-SHA256 opcional (``bytes`` ou ``str``).
+                Se não fornecida, tenta a variável de ambiente
+                ``TSBR_HMAC_KEY``. Sem chave, o arquivo é gravado sem
+                autenticação e um aviso é emitido.
         """
-        import joblib
-
-        embeddings_bytes = (
-            self._embeddings.tobytes() if self._embeddings is not None else b""
-        )
-        integrity_hash = hashlib.sha256(embeddings_bytes).hexdigest()
-
-        payload = {
-            "version": _INDEX_VERSION,
-            "type": "DenseIndex",
-            "data": {
-                "model_name": self.model_name,
-                "device": self.device,
-                "precision": self.precision,
-                "n_documents": self.n_documents,
-                "embedding_dim": self.embedding_dim,
-                "embeddings": self._embeddings,
-            },
-            "integrity_hash": integrity_hash,
+        meta: Dict[str, Any] = {
+            "model_name": self.model_name,
+            "device": self.device,
+            "revision": self.revision,
+            "precision": self.precision,
+            "n_documents": self.n_documents,
+            "embedding_dim": self.embedding_dim,
         }
-        joblib.dump(payload, path)
+        meta_bytes = json.dumps(meta, sort_keys=True, ensure_ascii=False).encode(
+            "utf-8"
+        )
+        len_meta = len(meta_bytes).to_bytes(4, "big")
+
+        buffer = io.BytesIO()
+        if self._embeddings is not None:
+            np.savez_compressed(buffer, embeddings=self._embeddings)
+        else:
+            np.savez_compressed(buffer, embeddings=np.array([], dtype=np.float32))
+        npz_bytes = buffer.getvalue()
+
+        payload_bytes = len_meta + meta_bytes + npz_bytes
+        _serialization.dump_authenticated_bytes(
+            payload_bytes,
+            Path(path),
+            type_name="DenseIndex",
+            hmac_key=hmac_key,
+        )
 
     @classmethod
-    def load(cls, path: Union[str, Path]) -> "DenseIndex":
+    def load(
+        cls,
+        path: Union[str, "os.PathLike[str]"],
+        *,
+        hmac_key: Union[bytes, str, None] = None,
+        allow_legacy_pickle: bool = False,
+    ) -> "DenseIndex":
         """Carrega e valida um índice denso do disco.
+
+        Suporta o formato seguro ``tsbr-index-v2`` (NPZ + HMAC) e,
+        mediante opt-in explícito, arquivos legados em pickle/joblib.
 
         Args:
             path: Caminho do arquivo gerado por ``save()``.
+            hmac_key: Chave HMAC para validar autenticação. Se o arquivo
+                foi gravado sem HMAC, o load prossegue com aviso.
+            allow_legacy_pickle: Se ``True``, permite carregar arquivos
+                antigos em pickle/joblib, emitindo ``SecurityWarning``.
 
         Returns:
             Instância ``DenseIndex`` pronta para uso.
 
         Raises:
-            ValueError: Se a versão, tipo ou integridade não bater.
+            ValueError: Se a versão, tipo, integridade ou HMAC não
+                baterem; ou se um arquivo legado for encontrado sem
+                ``allow_legacy_pickle=True``.
         """
-        import joblib
+        header, payload_bytes = _serialization.load_authenticated_bytes(
+            Path(path),
+            hmac_key=hmac_key,
+            allow_legacy_pickle=allow_legacy_pickle,
+            expected_type="DenseIndex",
+        )
 
-        payload = joblib.load(path)
-        if payload.get("version") != _INDEX_VERSION:
-            raise ValueError(
-                f"Versão incompatível: esperada {_INDEX_VERSION!r}, "
-                f"encontrada {payload.get('version')!r}"
+        if header.get("format") == "legacy-pickle":
+            import joblib
+
+            payload = joblib.load(path)
+            data = payload["data"]
+            embeddings: NDArray[Any] | None = data.get("embeddings")
+            idx = cls(
+                model_name=data["model_name"],
+                device=data.get("device"),
+                revision=data.get("revision"),
+                precision=data.get("precision", "float32"),
             )
-        if payload.get("type") != "DenseIndex":
-            raise ValueError(
-                f"Tipo inválido: esperado 'DenseIndex', "
-                f"encontrado {payload.get('type')!r}"
-            )
-        data = payload["data"]
-        embeddings: NDArray[Any] | None = data.get("embeddings")
-        embeddings_bytes = embeddings.tobytes() if embeddings is not None else b""
-        expected_hash = hashlib.sha256(embeddings_bytes).hexdigest()
-        if payload.get("integrity_hash") != expected_hash:
-            raise ValueError(
-                "Arquivo de índice corrompido (hash de integridade inválido)."
-            )
+            idx._embeddings = embeddings
+            idx.n_documents = data.get("n_documents", 0)
+            idx.embedding_dim = data.get("embedding_dim", 0)
+            return idx
+
+        # Formato novo: [len_meta:uint32 BE][meta_json][npz_bytes]
+        if len(payload_bytes) < 4:
+            raise ValueError("Payload do índice denso está vazio ou corrompido.")
+        len_meta = int.from_bytes(payload_bytes[:4], "big")
+        meta_end = 4 + len_meta
+        if meta_end > len(payload_bytes):
+            raise ValueError("Metadados do índice denso estão truncados.")
+
+        meta = json.loads(payload_bytes[4:meta_end].decode("utf-8"))
+        npz_bytes = payload_bytes[meta_end:]
+
+        buffer = io.BytesIO(npz_bytes)
+        with np.load(buffer, allow_pickle=False) as npz:
+            embeddings = npz["embeddings"]
 
         idx = cls(
-            model_name=data["model_name"],
-            device=data.get("device"),
-            precision=data.get("precision", "float32"),
+            model_name=meta["model_name"],
+            device=meta.get("device"),
+            revision=meta.get("revision"),
+            precision=meta.get("precision", "float32"),
         )
         idx._embeddings = embeddings
-        idx.n_documents = data.get("n_documents", 0)
-        idx.embedding_dim = data.get("embedding_dim", 0)
+        idx.n_documents = meta.get("n_documents", 0)
+        idx.embedding_dim = meta.get("embedding_dim", 0)
         return idx

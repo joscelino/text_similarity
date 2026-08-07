@@ -15,15 +15,15 @@ jobs:
     steps:
       # 1. Checkout do código (puxa o repositório para a máquina virtual)
       - name: Checkout Repository
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
 
       # 2. Instala o 'uv' usando a action oficial da Astral
       - name: Setup uv
-        uses: astral-sh/setup-uv@v5
+        uses: astral-sh/setup-uv@v9
 
       # 3. Setup nativo do Python 3.12 via setup-python integrado
       - name: Setup Python
-        uses: actions/setup-python@v5
+        uses: actions/setup-python@v7
         with:
           python-version: "3.12"
 

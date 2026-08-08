@@ -19,7 +19,7 @@ jobs:
 
       # 2. Instala o 'uv' usando a action oficial da Astral
       - name: Setup uv
-        uses: astral-sh/setup-uv@v9
+        uses: astral-sh/setup-uv@v9.0.0
 
       # 3. Setup nativo do Python 3.12 via setup-python integrado
       - name: Setup Python

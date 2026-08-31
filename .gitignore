@@ -218,3 +218,7 @@ dist/
 tests/assets/
 .lionclaw/
 .codegraph/
+
+# LionClaw pipeline artifacts
+SPEC.md
+SPEC_PROGRESS.md

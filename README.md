@@ -1,3 +1,5 @@
+[Português](https://github.com/joscelino/text_similarity/blob/main/README.pt-br.md)
+
 # Text Similarity PT-BR
 
 [![CI Pipeline](https://github.com/joscelino/text_similarity/actions/workflows/pipeline.yaml/badge.svg)](https://github.com/joscelino/text_similarity/actions/workflows/pipeline.yaml)
@@ -7,307 +9,321 @@
 [![Ruff](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/astral-sh/ruff/main/assets/badge/v2.json)](https://github.com/astral-sh/ruff)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 
-> Uma biblioteca Python otimizada e especializada na comparação de similaridade de textos em português brasileiro (PT-BR). Ideal para sistemas de NLP, chatbots, análise de sentimento e cruzamento de dados onde as peculiaridades do idioma, formatação de dinheiro, fonética regional e medidas influenciam a real intenção e semelhança dos textos.
+> An optimized Python library specialized in text similarity comparison for Brazilian Portuguese (PT-BR). Ideal for NLP systems, chatbots, sentiment analysis, and data matching where the language's peculiarities, money formatting, regional phonetics, and measurements influence the true intent and similarity of texts.
 
 ---
 
-## 📚 Índice
+## 📚 Table of Contents
 
-- [✨ Recursos Principais](#-recursos-principais)
-- [Requisitos](#requisitos)
-- [🚀 Instalação](#-instalação)
-- [📖 Como Usar](#-como-usar)
-  - [Modo Básico](#modo-básico-rápido-e-simples)
-  - [Modo Smart](#modo-smart-entidades-e-fonética)
-  - [Modo Semântico](#modo-semântico-word-embeddings)
-  - [Processamento em Lote](#processamento-em-lote-batch)
-  - [Comparação Multi-Query](#comparação-multi-query-compare_many_to_many)
-  - [Fusão de Rankings via RRF](#fusão-de-rankings-via-rrf-fusion_strategyrrf)
-  - [Execução Paralela](#execução-paralela-strategyparallel)
-  - [Integração Async](#integração-async-fastapi-aiohttp)
-  - [Re-Ranking de Bancos Vetoriais](#re-ranking-de-resultados-de-bancos-vetoriais)
-  - [Entendendo os Matches (Explain)](#entendendo-por-que-deram-match-explain)
-  - [Uso Apenas para Tratamento de Texto](#uso-apenas-para-tratamento-de-texto)
-  - [Bypass do Pré-processamento](#bypass-do-pré-processamento-preprocessfalse)
-- [📊 Integração com DataFrames](#-integração-com-dataframes)
-- [⚡ Performance para Alto Volume](#-performance-para-alto-volume)
-- [🎯 Interpretação dos Scores](#-interpretação-dos-scores)
-- [📈 Calibração de Pesos (Grid Search)](#-calibração-de-pesos-grid-search)
-- [⚙️ Configuração do Cache](#️-configuração-do-cache)
+- [✨ Key Features](#-key-features)
+- [Requirements](#requirements)
+- [🚀 Installation](#-installation)
+- [📖 How to Use](#-how-to-use)
+  - [Basic Mode](#basic-mode-fast-and-simple)
+  - [Smart Mode](#smart-mode-entities-and-phonetics)
+  - [Semantic Mode](#semantic-mode-word-embeddings)
+  - [Batch Processing](#batch-processing)
+  - [Multi-Query Comparison](#multi-query-comparison-compare_many_to_many)
+  - [Rank Fusion via RRF](#rank-fusion-via-rrf-fusion_strategyrrf)
+  - [Parallel Execution](#parallel-execution-strategyparallel)
+  - [Async Integration](#async-integration-fastapi-aiohttp)
+  - [Re-Ranking Vector Database Results](#re-ranking-vector-database-results)
+  - [Understanding Why They Matched (Explain)](#understanding-why-they-matched-explain)
+  - [Using Only for Text Processing](#using-only-for-text-processing)
+  - [Preprocessing Bypass](#preprocessing-bypass-preprocessfalse)
+- [📊 DataFrame Integration](#-dataframe-integration)
+- [⚡ High-Volume Performance](#-high-volume-performance)
+- [🎯 Interpreting Scores](#-interpreting-scores)
+- [📈 Weight Calibration (Grid Search)](#-weight-calibration-grid-search)
+- [⚙️ Cache Configuration](#️-cache-configuration)
 - [🔒 Security](#-security)
-  - [Upgrade guide](#upgrade-guide)
-- [🔌 Extensibilidade](#-extensibilidade--registrando-entidades-customizadas)
-- [🤝 Contribuindo](#-contribuindo)
+  - [Upgrade Guide](#upgrade-guide)
+- [🔌 Extensibility](#-extensibility--registering-custom-entities)
+- [🤝 Contributing](#-contributing)
 
 ---
 
-## ✨ Recursos Principais
+## ✨ Key Features
 
-- **Limpeza Especializada (TextCleaner):** Expansão de contrações modernas ("vc" -> "você", "fds" -> "fim de semana") e tratamento de acentos focado no nosso idioma.
-- **Detecção de Entidades (EntityNormalizer):** Extração e preservação inteligente de grandezas antes da "limpeza bruta" que as destruiria. (Ex: converte `R$ 30,00` para a tag única `<money:30.0>`).
-  - Dinheiro (`R$ 30,00`, `30 reais`)
-  - Datas (`12/03/2023`, `ontem`)
-  - Dimensões/Pesos (`2kg`, `10 m`)
-  - Modelos de Produto (`S22 Ultra`, `iPhone 13 Pro`)
-- **Pré-processamento Avançado:** Tokenização, remoção de _stopwords_ do português, e Lematização (com suporte nativo ao SpaCy `pt_core_news_sm`).
-- **Comparações Híbridas:** Algoritmos combinados para ir além das palavras (Bag-of-Words).
-  - *Cosseno (TF-IDF)*: Para variação lexical.
-  - *BM25 (Okapi BM25)*: Alternativa ao TF-IDF, superior para textos curtos (produtos, modelos). Selecionável via `indexing_strategy="bm25"`.
-  - *Índice Denso (sentence-transformers)*: Filtro inicial por similaridade semântica densa, capturando sinônimos sem sobreposição lexical. Selecionável via `indexing_strategy="dense"`.
-  - *Distância de Edição (Levenshtein)*: Rápido, usando `rapidfuzz` para detectar erros de digitação.
-  - *Fonética (Metaphone PT-BR adaptado)*: Trata "cassaa" e "caça" como pesos idênticos.
-  - *Interseção de Entidades*: Lógica de "Curto-Circuito" que garante correspondência (score altíssimo) se a entidade de busca essencial (ex: `GN500`) for validada intacta em textos mais longos.
-- **Pipeline Otimizada (Joblib Cache):** Suporte a cache em disco nativo. Textos volumosos já mastigados nas etapas de Regex/SpaCy não gastam processamento de novo.
-- **Performance Otimizada para Alto Volume:** Regex pré-compilados, pré-processamento paralelo via `ProcessPoolExecutor`, batch spaCy com `nlp.pipe()`, cache persistente de catálogos em disco e LRU cache para dateparser.
+- **Specialized Cleaning (TextCleaner):** Expansion of modern contractions ("vc" -> "você", "fds" -> "fim de semana") and accent handling focused on Brazilian Portuguese.
+- **Entity Detection (EntityNormalizer):** Intelligent extraction and preservation of quantities before "brute-force cleaning" would destroy them. (Example: converts `R$ 30,00` to the unique tag `<money:30.0>`).
+  - Money (`R$ 30,00`, `30 reais`)
+  - Dates (`12/03/2023`, `ontem`)
+  - Dimensions/Weights (`2kg`, `10 m`)
+  - Product Models (`S22 Ultra`, `iPhone 13 Pro`)
+- **Advanced Preprocessing:** Tokenization, removal of Portuguese _stopwords_, and Lemmatization (with native SpaCy `pt_core_news_sm` support).
+- **Hybrid Comparisons:** Combined algorithms that go beyond words (Bag-of-Words).
+  - *Cosine (TF-IDF)*: For lexical variation.
+  - *BM25 (Okapi BM25)*: Alternative to TF-IDF, superior for short texts (products, models). Selectable via `indexing_strategy="bm25"`.
+  - *Dense Index (sentence-transformers)*: Initial filter by dense semantic similarity, capturing synonyms without lexical overlap. Selectable via `indexing_strategy="dense"`.
+  - *Edit Distance (Levenshtein)*: Fast, using `rapidfuzz` to detect typos.
+  - *Phonetics (Adapted PT-BR Metaphone)*: Treats "cassaa" and "caça" as identical weights.
+  - *Entity Intersection*: "Short-Circuit" logic that guarantees a match (very high score) if the essential search entity (e.g., `GN500`) is validated intact in longer texts.
+- **Optimized Pipeline (Joblib Cache):** Native disk cache support. Large texts already processed by Regex/SpaCy stages do not consume processing again.
+- **Optimized High-Volume Performance:** Pre-compiled regex, parallel preprocessing via `ProcessPoolExecutor`, spaCy batching with `nlp.pipe()`, persistent catalog cache on disk, and LRU cache for dateparser.
 
 ---
 
-## Requisitos
+## Requirements
 
 - **Python:** >= 3.9
-- **Dependências principais:** `scikit-learn`, `rapidfuzz`, `sentence-transformers` (incluída desde a v0.4.0)
-- **Dependência opcional:** `spacy` + modelo `pt_core_news_sm` (para lematização)
+- **Main dependencies:** `scikit-learn`, `rapidfuzz`, `sentence-transformers` (included since v0.4.0)
+- **Optional dependency:** `spacy` + model `pt_core_news_sm` (for lemmatization)
 
 ---
 
-## 🚀 Instalação
+## 🚀 Installation
 
 ```bash
-# Com uv (recomendado)
+# With uv (recommended)
 uv add text-similarity-br
 
-# Com pip
+# With pip
 pip install text-similarity-br
 ```
 
-A partir da versão 0.4.0, o pacote já inclui `sentence-transformers` como dependência, habilitando **Similaridade Semântica** sem instalação adicional.
+Starting from version 0.4.0, the package already includes `sentence-transformers` as a dependency, enabling **Semantic Similarity** without additional installation.
 
-Com suporte a lematização via SpaCy (opcional):
+With optional SpaCy lemmatization support:
 
 ```bash
-# Com uv
+# With uv
 uv add "text-similarity-br[nlp]"
 uv run python -m spacy download pt_core_news_sm
 
-# Com pip
+# With pip
 pip install "text-similarity-br[nlp]"
 python -m spacy download pt_core_news_sm
 ```
 
 ---
 
-## 📖 Como Usar
+## 📖 How to Use
 
-A API pública foi desenhada em torno da fachada `Comparator`, garantindo facilidade sem esconder o poder customizável.
+The public API is designed around the `Comparator` facade, ensuring ease of use without hiding customizable power.
 
-### Modo Básico (Rápido e Simples)
-Opera apenas sobre Bag-of-Words e correções de grafia (Levenshtein/Cosseno). Ideal para volume de dados altos e textos curtos.
+### Basic Mode (Fast and Simple)
+
+Operates only on Bag-of-Words and spelling corrections (Levenshtein/Cosine). Ideal for high data volume and short texts.
 
 ```python
 from text_similarity.api import Comparator
 
 comp = Comparator.basic()
 
+# Input texts are in Brazilian Portuguese (PT-BR).
 score = comp.compare("iphone 13 pro", "iphone pro 13")
-print(f"Similaridade: {score:.2f}") # Output ~0.8 a 1.0 dependendo do peso
+print(f"Similarity: {score:.2f}")  # Output ~0.8 to 1.0 depending on weight
 ```
 
-### Modo "Smart" (Entidades e Fonética)
-Ativa nativamente os extratores de Moeda, Data, Dimensões, Modelos de Produto e aplica cálculos fonéticos. Aceita os parâmetros `fusion_strategy` (`"linear"` ou `"rrf"`) e `rrf_k` para controlar a fusão dos rankings em operações batch.
+### "Smart" Mode (Entities and Phonetics)
+
+Natively activates extractors for Currency, Date, Dimensions, Product Models, and applies phonetic calculations. Accepts the parameters `fusion_strategy` (`"linear"` or `"rrf"`) and `rrf_k` to control ranking fusion in batch operations.
 
 ```python
 from text_similarity.api import Comparator
 
 comp = Comparator.smart()
 
-novo_score = comp.compare("Foi me cobrado 30 reais", "O preço é R$ 30,00")
+# Input texts are in Brazilian Portuguese (PT-BR).
+new_score = comp.compare("Foi me cobrado 30 reais", "O preço é R$ 30,00")
 
-print(f"Similaridade Smart: {novo_score:.2f}")
-# Resultado alto por conta da identificação da entidade financeira exata
+print(f"Smart Similarity: {new_score:.2f}")
+# High result due to exact financial entity identification
 
-# --- Interseção Perfeita de Modelos (Short-circuit) ---
+# --- Perfect Model Intersection (Short-circuit) ---
+# Input texts are in Brazilian Portuguese (PT-BR).
 score_modelo = comp.compare("GN500", "Temos as peças GN 500, GN 1000 e SK 200")
-print(f"Score Modelo Embutido: {score_modelo:.2f}")
-# Resultado: ~0.95. Ao localizar o modelo procurado "GN500" isolado no meio do
-# texto longo alvo, o algoritmo de intersecção assegura diretamente uma alta
-# pontuação, ignorando todo o resto da string longa que causaria diluição.
+print(f"Embedded Model Score: {score_modelo:.2f}")
+# Result: ~0.95. When the searched model "GN500" is found isolated inside the
+# long target text, the intersection algorithm directly ensures a high score,
+# ignoring the rest of the long string that would cause dilution.
 ```
 
-#### Filtrando Entidades Específicas
+#### Filtering Specific Entities
 
-Por padrão, o modo `smart` ativa **todos** os extratores (`money`, `date`, `dimension`, `number`, `product_model`). Você pode restringir apenas às entidades relevantes para o seu domínio passando o parâmetro `entities`:
+By default, `smart` mode activates **all** extractors (`money`, `date`, `dimension`, `number`, `product_model`). You can restrict only to the entities relevant to your domain by passing the `entities` parameter:
 
 ```python
 from text_similarity.api import Comparator
 
-# Apenas modelos de produto — ideal para catálogos de peças técnicas
+# Only product models — ideal for technical parts catalogs
 comp = Comparator.smart(entities=["product_model"])
 
-# Apenas valores monetários — ideal para sistemas financeiros
+# Only monetary values — ideal for financial systems
 comp_fin = Comparator.smart(entities=["money", "number"])
 
-# Datas e dimensões — ideal para laudos e fichas técnicas
+# Dates and dimensions — ideal for reports and technical datasheets
 comp_lab = Comparator.smart(entities=["date", "dimension"])
 ```
 
-> **Dica:** Filtrar entidades melhora a precisão evitando falsos positivos. Um extrator de `date` ativo num catálogo de produtos pode mapear incorretamente SKUs contendo dígitos de ano.
+> **Tip:** Filtering entities improves precision by avoiding false positives. An active `date` extractor in a product catalog could incorrectly map SKUs containing year digits.
 
-#### Opções de Pesos e Algoritmos
+#### Weight and Algorithm Options
 
-Ao utilizar o modo `smart`, você pode equilibrar os seguintes algoritmos através do parâmetro `weights` (no construtor) ou `rrf_weights` (nas funções de média/batch):
+When using `smart` mode, you can balance the following algorithms through the `weights` parameter (in the constructor) or `rrf_weights` (in average/batch functions):
 
-| Opção | Nome Técnico | O que avalia | Melhor uso |
+| Option | Technical Name | What it evaluates | Best use |
 | :--- | :--- | :--- | :--- |
-| **`cosine`** | Cosseno (TF-IDF) | Frequência e raridade das palavras. | Detectar palavras-chave idênticas. |
-| **`bm25`** | Okapi BM25 | Relevância com saturação de frequência. | Textos curtos (produtos, SKUs). Ativado via `indexing_strategy="bm25"`. |
-| **`edit`** | Levenshtein | Proximidade de caracteres (escrita). | Capturar erros de digitação (typos). |
-| **`phonetic`** | Fonética (PT-BR) | Pronúncia das palavras em português. | Capturar trocas de letras com som igual (ex: S/Z/X). |
-| **`semantic`** | Semântica | Significado e contexto (Embeddings). | Encontrar sinônimos (ex: "carro" vs "veículo"). |
-| **`entity`** | Entidades | Identificadores específicos. | Garantir que códigos e modelos coincidam. |
+| **`cosine`** | Cosine (TF-IDF) | Frequency and rarity of words. | Detect identical keywords. |
+| **`bm25`** | Okapi BM25 | Relevance with term frequency saturation. | Short texts (products, SKUs). Enabled via `indexing_strategy="bm25"`. |
+| **`edit`** | Levenshtein | Character proximity (spelling). | Capture typos. |
+| **`phonetic`** | Phonetics (PT-BR) | Pronunciation of words in Portuguese. | Capture letter swaps with equal sound (e.g., S/Z/X). |
+| **`semantic`** | Semantic | Meaning and context (Embeddings). | Find synonyms (e.g., "carro" vs "veículo"). |
+| **`entity`** | Entities | Specific identifiers. | Ensure codes and models match. |
 
-### Modo Semântico (Word Embeddings)
-Para capturar a real intenção semântica entre sinônimos que não compartilham nenhuma letra (ex: `"veículo"` vs `"carro"`), você pode ativar o motor de **Sentence-Transformers**.
+### Semantic Mode (Word Embeddings)
+
+To capture the real semantic intent between synonyms that share no letters (e.g., `"veículo"` vs `"carro"`), you can activate the **Sentence-Transformers** engine.
 
 ```python
 from text_similarity.api import Comparator
 
-# Habilita o uso de modelos densos por debaixo dos panos
+# Enables dense models under the hood
 comp = Comparator.smart(use_embeddings=True)
 
+# Input texts are in Brazilian Portuguese (PT-BR).
 score = comp.compare("automóvel bicombustível", "carro flex")
-print(f"Similaridade Semântica: {score:.2f}") # Alto score, diferentemente do TF-IDF puro.
+print(f"Semantic Similarity: {score:.2f}")  # High score, unlike pure TF-IDF.
 ```
-*Atenção: A primeira chamada em cada processo isolado pode demorar alguns milisegundos a mais para carregar o modelo PyTorch na RAM. Nos métodos de Lote (`compare_batch` / `strategy="parallel"`), a Similaridade Semântica age como uma avaliação final super otimizada apenas nos `top_n` retornados pelo TF-IDF.*
 
-### Processamento em Lote (Batch)
-Para casos de uso onde é necessário comparar uma *query* contra centenas ou milhares de candidatos, utilize o método `compare_batch`. Ele é altamente otimizado aplicando matrizes esparsas via Scikit-Learn e descartes (short-circuit) matemáticos. Entregando resultados consolidados até **~48x mais rápido** dependendo do volume.
+*Note: The first call in each isolated process may take a few extra milliseconds to load the PyTorch model into RAM. In batch methods (`compare_batch` / `strategy="parallel"`), Semantic Similarity acts as a final super-optimized evaluation only on the `top_n` returned by TF-IDF.*
+
+### Batch Processing
+
+For use cases where you need to compare a *query* against hundreds or thousands of candidates, use the `compare_batch` method. It is highly optimized by applying sparse matrices via Scikit-Learn and mathematical short-circuits, delivering consolidated results up to **~48x faster** depending on volume.
 
 ```python
 from text_similarity.api import Comparator
+
 comp = Comparator.smart()
 
-busca = "Notebook Dell Inspiron 15"
-candidatos = [
+# Input texts are in Brazilian Portuguese (PT-BR).
+query = "Notebook Dell Inspiron 15"
+candidates = [
     "Dell Inspiron 15 polegadas i5",
     "Notebook Lenovo Thinkpad",
     "Mouse sem fio logitech",
-    # ... 10,000 outros itens
+    # ... 10,000 other items
 ]
 
-# Filtra rapidamente por TF-IDF mínimo (0.1) e extrai os 5 melhores
-resultados = comp.compare_batch(busca, candidatos, top_n=5, min_cosine=0.1)
+# Quickly filter by minimum TF-IDF (0.1) and extract the top 5
+results = comp.compare_batch(query, candidates, top_n=5, min_cosine=0.1)
 
-for r in resultados:
+for r in results:
     print(f"Score: {r['score']:.2f} | Match: {r['candidate']}")
 ```
 
-### Comparação Multi-Query (`compare_many_to_many`)
-Quando você precisa comparar **múltiplas buscas** contra o mesmo catálogo de candidatos, use `compare_many_to_many`. Ele pré-computa a matriz TF-IDF dos candidatos **uma única vez**, eliminando recálculos redundantes e entregando speedups significativos em cenários de alto volume.
+### Multi-Query Comparison (`compare_many_to_many`)
+
+When you need to compare **multiple queries** against the same candidate catalog, use `compare_many_to_many`. It pre-computes the candidate TF-IDF matrix **only once**, eliminating redundant recalculations and delivering significant speedups in high-volume scenarios.
 
 ```python
 from text_similarity.api import Comparator
+
 comp = Comparator.smart()
 
-buscas = [
+queries = [
     "Notebook Dell Inspiron 15",
     "Mouse sem fio logitech",
     "Monitor Samsung 27 polegadas",
 ]
-candidatos = [
+candidates = [
     "Dell Inspiron 15 polegadas i5",
     "Notebook Lenovo Thinkpad",
     "Mouse logitech wireless",
     "Monitor Samsung 27'' 4K",
-    # ... milhares de itens
+    # ... thousands of items
 ]
 
-# Retorna uma lista de resultados para CADA query
-todos_resultados = comp.compare_many_to_many(
-    buscas, candidatos, top_n=5, min_cosine=0.1
+# Returns a list of results for EACH query
+all_results = comp.compare_many_to_many(
+    queries, candidates, top_n=5, min_cosine=0.1
 )
 
-for query, resultados in zip(buscas, todos_resultados):
+for query, results in zip(queries, all_results):
     print(f"\n🔍 Query: {query}")
-    for r in resultados:
+    for r in results:
         print(f"  Score: {r['score']:.2f} | {r['candidate']}")
 ```
 
-> **Quando usar qual?**
-> - `compare_batch()` → 1 query × N candidatos (ex: busca textual de um usuário).
-> - `compare_many_to_many()` → M queries × N candidatos (ex: deduplicação em lote, cruzamento de bases).
+> **When to use which?**
+> - `compare_batch()` → 1 query × N candidates (e.g., a user's text search).
+> - `compare_many_to_many()` → M queries × N candidates (e.g., batch deduplication, database matching).
 
-### Fusão de Rankings via RRF (`fusion_strategy="rrf"`)
-Por padrão, o `Comparator` combina os scores dos algoritmos por **soma ponderada** (estratégia `"linear"`). Para cenários onde os scores brutos dos algoritmos possuem escalas muito diferentes (ex: mistura de léxico com semântica), você pode usar **Reciprocal Rank Fusion (RRF)**, que baseia-se na **posição** dos candidatos em cada ranking em vez dos scores brutos:
+### Rank Fusion via RRF (`fusion_strategy="rrf"`)
+
+By default, `Comparator` combines algorithm scores by **weighted sum** (strategy `"linear"`). For scenarios where raw algorithm scores have very different scales (e.g., mixing lexical with semantic), you can use **Reciprocal Rank Fusion (RRF)**, which is based on the **position** of candidates in each ranking rather than raw scores:
 
 ```python
 from text_similarity.api import Comparator
 
-# RRF: combina rankings por posição, eliminando problemas de escala
+# RRF: combines rankings by position, eliminating scale problems
 comp = Comparator.smart(fusion_strategy="rrf")
 
-resultados = comp.compare_batch(
+results = comp.compare_batch(
     "Notebook Dell Inspiron",
-    candidatos,
+    candidates,
     top_n=10,
     min_cosine=0.1,
 )
 
-# Cada resultado inclui detalhes do RRF: rank e contribuição de cada algoritmo
-for r in resultados:
+# Each result includes RRF details: rank and contribution of each algorithm
+for r in results:
     print(f"Score: {r['score']:.2f} | {r['candidate']}")
-    print(f"  Detalhes: {r['details']}")
+    print(f"  Details: {r['details']}")
 ```
 
-O parâmetro `rrf_k` (padrão 60) controla a suavização: valores maiores atenuam a diferença entre posições no ranking.
+The `rrf_k` parameter (default 60) controls smoothing: larger values attenuate the difference between positions in the ranking.
 
 ```python
-# RRF com suavização mais agressiva
+# RRF with more aggressive smoothing
 comp = Comparator.smart(fusion_strategy="rrf", rrf_k=100)
 ```
 
-#### Pesos por Algoritmo (`rrf_weights`)
+#### Per-Algorithm Weights (`rrf_weights`)
 
-Por padrão, todos os algoritmos contribuem igualmente no RRF. Use `rrf_weights` para dar mais importância a algoritmos específicos — por exemplo, priorizando similaridade semântica sobre busca léxica:
+By default, all algorithms contribute equally in RRF. Use `rrf_weights` to give more importance to specific algorithms — for example, prioritizing semantic similarity over lexical search:
 
 ```python
 from text_similarity.api import Comparator
 
-# Prioriza semântica (70%) sobre léxico (30%) no ranking final
+# Prioritizes semantic (70%) over lexical (30%) in the final ranking
 comp = Comparator.smart(
     use_embeddings=True,
     fusion_strategy="rrf",
     rrf_weights={"cosine": 0.3, "semantic": 0.7},
 )
 
-# Prioriza fonética para domínios com erros de digitação frequentes
-comp_fon = Comparator.smart(
+# Prioritizes phonetics for domains with frequent typos
+comp_phon = Comparator.smart(
     fusion_strategy="rrf",
     rrf_weights={"cosine": 0.3, "edit": 0.2, "phonetic": 0.5},
 )
 ```
 
-A fórmula aplicada é: `score = Σ weight_i * 1/(k + rank_i)`. Algoritmos não listados em `rrf_weights` recebem peso `1.0` por padrão.
+The applied formula is: `score = Σ weight_i * 1/(k + rank_i)`. Algorithms not listed in `rrf_weights` receive a default weight of `1.0`.
 
-> **Quando usar `"rrf"` vs `"linear"`:**
-> - `fusion_strategy="linear"` (padrão) → Quando os algoritmos operam em escalas similares e os pesos foram calibrados para o seu domínio.
-> - `fusion_strategy="rrf"` → Quando mistura algoritmos com escalas distintas (ex: TF-IDF + Semântico), ou quando candidatos consistentemente bem posicionados em múltiplos rankings devem ser priorizados, independentemente do score absoluto.
-> - `rrf_weights` → Quando, além de usar RRF, você quer que determinado algoritmo tenha mais influência na posição final do ranking.
+> **When to use `"rrf"` vs `"linear"`:**
+> - `fusion_strategy="linear"` (default) → When algorithms operate on similar scales and weights have been calibrated for your domain.
+> - `fusion_strategy="rrf"` → When mixing algorithms with distinct scales (e.g., TF-IDF + Semantic), or when candidates consistently well-positioned across multiple rankings should be prioritized regardless of absolute score.
+> - `rrf_weights` → When, in addition to using RRF, you want a particular algorithm to have more influence on the final ranking position.
 
-Também disponível via import direto para uso avançado — útil quando você já possui rankings próprios (ex: vindos de Elasticsearch, banco vetorial, ou algoritmos customizados) e quer fundi-los:
+Also available via direct import for advanced use — useful when you already have your own rankings (e.g., from Elasticsearch, a vector database, or custom algorithms) and want to fuse them:
 
 ```python
 from text_similarity import RRFusion
 
-# Cada sublista é o ranking de UM algoritmo, ordenado por score descendente.
-# A estrutura é: [{"candidate": str, "score": float}, ...]
-rankings_por_algoritmo = [
-    # Ranking do algoritmo "cosine"
+# Each sublist is the ranking of ONE algorithm, ordered by descending score.
+# Structure is: [{"candidate": str, "score": float}, ...]
+rankings_by_algorithm = [
+    # Ranking from the "cosine" algorithm
     [
         {"candidate": "Dell Inspiron 15 i5", "score": 0.92},
         {"candidate": "Notebook Lenovo", "score": 0.45},
         {"candidate": "Mouse Logitech", "score": 0.10},
     ],
-    # Ranking do algoritmo "semantic"
+    # Ranking from the "semantic" algorithm
     [
         {"candidate": "Dell Inspiron 15 i5", "score": 0.85},
         {"candidate": "Mouse Logitech", "score": 0.30},
@@ -315,48 +331,51 @@ rankings_por_algoritmo = [
     ],
 ]
 
-# Nomes dos algoritmos, na MESMA ORDEM das sublistas acima
-nomes_algoritmos = ["cosine", "semantic"]
+# Algorithm names, in the SAME ORDER as the sublists above
+algorithm_names = ["cosine", "semantic"]
 
-# Pesos iguais (padrão)
+# Equal weights (default)
 rrf = RRFusion(k=60)
 
-# Ou com pesos por algoritmo
+# Or with per-algorithm weights
 rrf = RRFusion(k=60, weights={"cosine": 0.4, "semantic": 0.6})
 
-ranking_fundido = rrf.fuse(rankings_por_algoritmo, nomes_algoritmos)
+fused_ranking = rrf.fuse(rankings_by_algorithm, algorithm_names)
 
-for item in ranking_fundido:
-    print(f"Score RRF: {item['score']:.3f} | {item['candidate']}")
-    # Cada item inclui detalhes: rank, raw_score, rrf_contribution, weight
+for item in fused_ranking:
+    print(f"RRF Score: {item['score']:.3f} | {item['candidate']}")
+    # Each item includes details: rank, raw_score, rrf_contribution, weight
 ```
 
-> **Nota:** No uso padrão via `Comparator.smart(fusion_strategy="rrf")`, esses rankings são montados automaticamente pelo `Comparator`. O import direto do `RRFusion` é para cenários onde você quer fundir rankings de fontes externas.
+> **Note:** In standard usage via `Comparator.smart(fusion_strategy="rrf")`, these rankings are built automatically by `Comparator`. The direct `RRFusion` import is for scenarios where you want to fuse rankings from external sources.
 
-### Execução Paralela (`strategy="parallel"`)
-Para cenários de **alto volume** (50+ queries × 10k+ candidatos), ative a estratégia paralela que distribui as queries entre múltiplos processos via `ProcessPoolExecutor`:
+### Parallel Execution (`strategy="parallel"`)
+
+For **high-volume** scenarios (50+ queries × 10k+ candidates), activate the parallel strategy that distributes queries across multiple processes via `ProcessPoolExecutor`:
 
 ```python
 from text_similarity.api import Comparator
+
 comp = Comparator.smart()
 
-# Distribui entre 4 processos (padrão: os.cpu_count())
-resultados = comp.compare_many_to_many(
-    buscas, candidatos, top_n=5, min_cosine=0.1,
+# Distributes across 4 processes (default: os.cpu_count())
+results = comp.compare_many_to_many(
+    queries, candidates, top_n=5, min_cosine=0.1,
     strategy="parallel", n_workers=4,
 )
 
-# Funciona também com compare_batch
-resultado = comp.compare_batch(
-    "busca única", candidatos, top_n=10,
+# Also works with compare_batch
+result = comp.compare_batch(
+    "single query", candidates, top_n=10,
     strategy="parallel", n_workers=4,
 )
 ```
 
-> **⚠️ Quando NÃO usar `parallel`:** Para poucos queries (< 20) ou poucos candidatos (< 5k), o overhead de criação de processos pode superar o ganho. Use `strategy="vectorized"` (padrão) nesses casos.
+> **⚠️ When NOT to use `parallel`:** For few queries (< 20) or few candidates (< 5k), the overhead of process creation can outweigh the gain. Use `strategy="vectorized"` (default) in those cases.
 
-### Integração Async (FastAPI, aiohttp)
-Para **web servers assíncronos**, use os métodos `_async` que offloadam o trabalho CPU-bound para um `ProcessPoolExecutor`, mantendo o event loop livre:
+### Async Integration (FastAPI, aiohttp)
+
+For **async web servers**, use the `_async` methods that offload CPU-bound work to a `ProcessPoolExecutor`, keeping the event loop free:
 
 ```python
 from fastapi import FastAPI
@@ -380,17 +399,18 @@ async def bulk_search(queries: list[str], candidates: list[str]):
     return {"results": results}
 ```
 
-> **Métodos async disponíveis:** `compare_batch_async()` e `compare_many_to_many_async()`. Ambos usam `strategy="parallel"` internamente.
+> **Available async methods:** `compare_batch_async()` and `compare_many_to_many_async()`. Both use `strategy="parallel"` internally.
 
-### Re-Ranking de Resultados de Bancos Vetoriais
-Quando você já possui resultados de um banco vetorial (Pinecone, Qdrant, Milvus, PGVector, Elasticsearch) e quer **re-ordenar** usando validação linguística PT-BR (edição, fonética, entidades), use o `rerank_vector_results`. Ele funciona como um **Cross-Encoder linguístico brasileiro**, aplicando os algoritmos do `HybridSimilarity` sobre os resultados já filtrados pelo banco.
+### Re-Ranking Vector Database Results
+
+When you already have results from a vector database (Pinecone, Qdrant, Milvus, PGVector, Elasticsearch) and want to **re-rank** them using PT-BR linguistic validation (edit, phonetics, entities), use `rerank_vector_results`. It works as a **Brazilian Portuguese linguistic Cross-Encoder**, applying `HybridSimilarity` algorithms over the results already filtered by the database.
 
 ```python
 from text_similarity.api import Comparator
 
 comp = Comparator.smart(entities=["product_model"])
 
-# Resultados vindos do seu banco vetorial (Qdrant, Pinecone, etc.)
+# Results coming from your vector database (Qdrant, Pinecone, etc.)
 vector_results = [
     {"id": "doc1", "text": "Peças industriais variadas", "score": 0.90},
     {"id": "doc2", "text": "Ferramentas GN série completa", "score": 0.80},
@@ -398,135 +418,142 @@ vector_results = [
     {"id": "doc4", "text": "Peças GN500 originais", "score": 0.45},
 ]
 
-# Re-rankeia usando validação linguística
+# Re-ranks using linguistic validation
 reranked = comp.rerank_vector_results(
     "GN500",
     vector_results,
-    preprocess_query=True,        # pipeline na query do usuário
-    preprocess_candidates=True,   # pipeline nos textos (se brutos)
+    preprocess_query=True,        # pipeline on the user query
+    preprocess_candidates=True,   # pipeline on texts (if raw)
 )
 
 for r in reranked:
-    print(f"Score: {r['score']:.2f} (vetorial: {r['vector_score']:.2f}) | {r['candidate']}")
-# "Peças GN500 originais" sobe da posição #4 para #1 via short-circuit de entidade
+    print(f"Score: {r['score']:.2f} (vector: {r['vector_score']:.2f}) | {r['candidate']}")
+# "Peças GN500 originais" rises from position #4 to #1 via entity short-circuit
 ```
 
-O resultado inclui:
-- `id` — identificador do documento (preservado do input, se presente)
-- `candidate` — texto original
-- `score` — score final do HybridSimilarity
-- `vector_score` — score original do banco vetorial
-- `details` — detalhes por algoritmo (cosine, edit, phonetic, entity)
+The result includes:
+- `id` — document identifier (preserved from input, if present)
+- `candidate` — original text
+- `score` — final HybridSimilarity score
+- `vector_score` — original vector database score
+- `details` — per-algorithm details (cosine, edit, phonetic, entity)
 
-> **Formato de entrada:** Cada candidato deve ter pelo menos `"text"` (str) e `"score"` (float). O campo `"id"` é opcional.
+> **Input format:** Each candidate must have at least `"text"` (str) and `"score"` (float). The `"id"` field is optional.
 
-> **Pré-processamento:** Use `preprocess_candidates=False` (padrão) quando os textos do banco já estão normalizados. Use `True` quando os textos são brutos e precisam de limpeza/extração de entidades.
+> **Preprocessing:** Use `preprocess_candidates=False` (default) when database texts are already normalized. Use `True` when texts are raw and need cleaning/entity extraction.
 
-> **Compatível com RRF:** Funciona com `fusion_strategy="rrf"` para combinar rankings por posição:
+> **RRF compatible:** Works with `fusion_strategy="rrf"` to combine rankings by position:
 > ```python
 > comp = Comparator.smart(entities=["product_model"], fusion_strategy="rrf")
 > reranked = comp.rerank_vector_results("GN500", vector_results)
 > ```
 
-### Entendendo "Por que" deram Match (Explain)
-Às vezes você precisa debugar a intenção do usuário ou mostrar evidências de que o cruzamento de algoritmos detectou semelhança. Use o `.explain()`:
+### Understanding Why They Matched (Explain)
+
+Sometimes you need to debug user intent or show evidence that the algorithm crossover detected similarity. Use `.explain()`:
 
 ```python
 from text_similarity.api import Comparator
+
 comp = Comparator.smart()
 
-detalhes = comp.explain("televisão samsung 55 polegadas", "tv samsung 55\"")
+# Input texts are in Brazilian Portuguese (PT-BR).
+details = comp.explain("televisão samsung 55 polegadas", "tv samsung 55\"")
 
-print(detalhes["score"])
+print(details["score"])
 # 0.85
-print(detalhes["details"])
-# {'cosine': 0.82, 'edit': 0.80, 'phonetic': 0.95} -> Foneticamente altíssimo e detectada dimensão de 55.
+print(details["details"])
+# {'cosine': 0.82, 'edit': 0.80, 'phonetic': 0.95} -> Very high phonetic match and detected 55 dimension.
 ```
 
-> **Comportamento com strings vazias:** `explain("", "qualquer texto")` retorna `{"score": 0.0, "details": {}}` sem lançar exceção.
+> **Behavior with empty strings:** `explain("", "any text")` returns `{"score": 0.0, "details": {}}` without raising an exception.
 
-> **Short-circuit no `explain()`:** Quando uma entidade é detectada com interseção total (ex: busca por `<productmodel:GN500>` encontrada no texto alvo), `explain()` retorna `{"score": 0.95, "details": {"entity": {..., "short_circuit": True}}}`, igualmente ao `compare()`.
+> **Short-circuit in `explain()`:** When an entity is detected with total intersection (e.g., search for `<productmodel:GN500>` found in the target text), `explain()` returns `{"score": 0.95, "details": {"entity": {..., "short_circuit": True}}}`, just like `compare()`.
 
-> **`compare_batch()` com lista vazia:** `comp.compare_batch("qualquer", [])` retorna `[]` imediatamente, sem processamento.
+> **`compare_batch()` with empty list:** `comp.compare_batch("any", [])` returns `[]` immediately, without processing.
 
-### Uso Apenas para Tratamento de Texto
-Se o seu objetivo não for realizar comparações, mas apenas aproveitar o robusto motor de processamento em português (para limpar bases de dados, treinar modelos, remover acentos, expandir contrações e lematizar), você pode instanciar as etapas da `Pipeline` de forma autônoma e oficial:
+### Using Only for Text Processing
+
+If your goal is not to perform comparisons, but only to take advantage of the robust Portuguese processing engine (to clean databases, train models, remove accents, expand contractions, and lemmatize), you can instantiate `Pipeline` stages autonomously and officially:
 
 ```python
 from text_similarity.pipeline.pipeline import PreprocessingPipeline
 from text_similarity.pipeline.backends import CleanTextStage, TokenizerStage, StopwordsStage
 
-# Monte seu pipeline customizado apenas com o que precisa:
+# Build your custom pipeline with only what you need:
 pipeline = PreprocessingPipeline([
-    CleanTextStage(),  # Expansão de contrações ("vc" -> "você"), sem acentos, lowercase
-    TokenizerStage(),  # Tokenização segura
-    StopwordsStage()   # Remoção de conectivos inúteis do PT-BR
+    CleanTextStage(),  # Contraction expansion ("vc" -> "você"), no accents, lowercase
+    TokenizerStage(),  # Safe tokenization
+    StopwordsStage()   # Removal of useless PT-BR connectives
 ])
 
-texto_bruto = "Limpando meeu texto, crz... vc viu a promo???"
-texto_tratado, stats = pipeline.process(texto_bruto)
+# Input text is in Brazilian Portuguese (PT-BR).
+raw_text = "Limpando meeu texto, crz... vc viu a promo???"
+treated_text, stats = pipeline.process(raw_text)
 
-print(texto_tratado)
-# Saída esperada (bag of words tratado): "limpar texto crz ver promo"
+print(treated_text)
+# Expected output (treated bag of words): "limpar texto crz ver promo"
 ```
 
-### Bypass do Pré-processamento (`preprocess=False`)
-Quando seus textos **já foram limpos externamente** (ex: vindos de um pipeline ETL, banco de dados normalizado ou outro sistema de NLP), você pode desativar o pré-processamento para evitar transformações redundantes e ganhar performance:
+### Preprocessing Bypass (`preprocess=False`)
+
+When your texts **have already been cleaned externally** (e.g., coming from an ETL pipeline, normalized database, or another NLP system), you can disable preprocessing to avoid redundant transformations and gain performance:
 
 ```python
 from text_similarity.api import Comparator
+
 comp = Comparator.smart()
 
-# Textos já normalizados pelo seu pipeline externo
+# Texts already normalized by your external pipeline
 clean1 = "samsung galaxy s22 ultra 256gb"
 clean2 = "samsung galaxy s22 ultra 256gb preto"
 
-# Bypassa limpeza, tokenização, stopwords e lematização
+# Bypasses cleaning, tokenization, stopwords, and lemmatization
 score = comp.compare(clean1, clean2, preprocess=False)
 print(f"Score: {score:.2f}")
 
-# Também funciona com explain
-detalhes = comp.explain(clean1, clean2, preprocess=False)
+# Also works with explain
+details = comp.explain(clean1, clean2, preprocess=False)
 ```
 
-Funciona em **todos os métodos** de comparação:
+Works in **all comparison methods**:
 
 ```python
-# Batch — 1 query × N candidatos já limpos
-resultados = comp.compare_batch(
-    "galaxy s22", candidatos_limpos,
+# Batch — 1 query × N already-cleaned candidates
+results = comp.compare_batch(
+    "galaxy s22", cleaned_candidates,
     top_n=10, min_cosine=0.1, preprocess=False,
 )
 
-# Multi-query — M queries × N candidatos já limpos
-todos = comp.compare_many_to_many(
-    queries_limpas, candidatos_limpos,
+# Multi-query — M queries × N already-cleaned candidates
+all_results = comp.compare_many_to_many(
+    cleaned_queries, cleaned_candidates,
     top_n=5, preprocess=False,
 )
 
 # Async
-resultados = await comp.compare_batch_async(
-    "galaxy s22", candidatos_limpos,
+results = await comp.compare_batch_async(
+    "galaxy s22", cleaned_candidates,
     top_n=10, preprocess=False,
 )
 ```
 
-> **Quando usar `preprocess=False`:**
-> - Dados vindos de pipelines ETL que já normalizam texto.
-> - Re-ranking de resultados já processados por outro sistema (ex: Elasticsearch, banco vetorial).
-> - Benchmarks onde você quer isolar o custo dos algoritmos de similaridade sem overhead do pipeline.
+> **When to use `preprocess=False`:**
+> - Data coming from ETL pipelines that already normalize text.
+> - Re-ranking results already processed by another system (e.g., Elasticsearch, vector database).
+> - Benchmarks where you want to isolate the cost of similarity algorithms without pipeline overhead.
 >
-> **Atenção:** Com `preprocess=False`, o cache in-memory **não é utilizado** (não há hash nem armazenamento), e nenhuma etapa do pipeline é executada — incluindo extração de entidades. Certifique-se de que seus textos estão no formato esperado pelos algoritmos.
+> **Attention:** With `preprocess=False`, the in-memory cache **is not used** (there is no hash nor storage), and no pipeline stage is executed — including entity extraction. Make sure your texts are in the format expected by the algorithms.
 
 ---
 
-## 📊 Integração com DataFrames
+## 📊 DataFrame Integration
 
-A biblioteca reconhece automaticamente o tipo de DataFrame usado — **pandas, polars, cuDF, modin** ou qualquer objeto subscritável por nome de coluna. Nenhuma dependência adicional é instalada: os métodos retornam `List[dict]`, e você converte para o DataFrame da sua escolha.
+The library automatically recognizes the DataFrame type used — **pandas, polars, cuDF, modin**, or any object subscriptable by column name. No additional dependency is installed: methods return `List[dict]`, and you convert to the DataFrame of your choice.
 
-### Busca em DataFrame (`compare_dataframe`)
+### DataFrame Search (`compare_dataframe`)
 
-Compara uma query contra uma coluna de texto e retorna uma `List[dict]` com as linhas mais similares, incluindo todas as chaves originais e uma chave `score`:
+Compares a query against a text column and returns a `List[dict]` with the most similar rows, including all original keys and a `score` key:
 
 ```python
 # pandas
@@ -535,7 +562,7 @@ from text_similarity.api import Comparator
 
 comp = Comparator.smart(entities=["product_model"])
 
-catalogo = pd.DataFrame({
+catalog = pd.DataFrame({
     "sku": ["A001", "A002", "A003", "A004"],
     "descricao": [
         "Notebook Dell Inspiron 15 i5",
@@ -546,24 +573,24 @@ catalogo = pd.DataFrame({
     "preco": [3200, 450, 1800, 380],
 })
 
-resultados = comp.compare_dataframe(
-    df=catalogo,
+results = comp.compare_dataframe(
+    df=catalog,
     text_column="descricao",
     query="notebook dell inspiron",
     top_n=3,
     min_cosine=0.1,
 )
 
-# resultados é List[dict] — converta como quiser
-df_resultado = pd.DataFrame(resultados)
-print(df_resultado[["sku", "descricao", "preco", "score"]])
+# results is List[dict] — convert as you wish
+df_result = pd.DataFrame(results)
+print(df_result[["sku", "descricao", "preco", "score"]])
 ```
 
 ```python
-# polars (sem nenhuma alteração na chamada)
+# polars (no changes to the call needed)
 import polars as pl
 
-catalogo_pl = pl.DataFrame({
+catalog_pl = pl.DataFrame({
     "sku": ["A001", "A002", "A003", "A004"],
     "descricao": [
         "Notebook Dell Inspiron 15 i5",
@@ -574,13 +601,13 @@ catalogo_pl = pl.DataFrame({
     "preco": [3200, 450, 1800, 380],
 })
 
-resultados = comp.compare_dataframe(catalogo_pl, "descricao", "notebook dell inspiron")
-df_resultado = pl.DataFrame(resultados)
+results = comp.compare_dataframe(catalog_pl, "descricao", "notebook dell inspiron")
+df_result = pl.DataFrame(results)
 ```
 
-### Cruzamento de Bases (`record_linkage`)
+### Record Linkage (`record_linkage`)
 
-Compara duas tabelas encontrando os pares mais similares — ideal para deduplicação entre fornecedores ou cruzamento de catálogos. Retorna `List[dict]`:
+Compares two tables finding the most similar pairs — ideal for deduplication between suppliers or catalog matching. Returns `List[dict]`:
 
 ```python
 import pandas as pd
@@ -588,12 +615,12 @@ from text_similarity.api import Comparator
 
 comp = Comparator.smart()
 
-tabela_a = pd.DataFrame({
+table_a = pd.DataFrame({
     "id_a": [1, 2, 3],
     "produto_a": ["iPhone 13 Pro 256GB", "Samsung Galaxy S22", "Notebook Dell i5"],
 })
 
-tabela_b = pd.DataFrame({
+table_b = pd.DataFrame({
     "id_b": [10, 20, 30, 40],
     "produto_b": [
         "Apple iPhone 13 Pro",
@@ -603,100 +630,101 @@ tabela_b = pd.DataFrame({
     ],
 })
 
-pares = comp.record_linkage(
-    df_a=tabela_a,
-    df_b=tabela_b,
+pairs = comp.record_linkage(
+    df_a=table_a,
+    df_b=table_b,
     col_a="produto_a",
     col_b="produto_b",
     top_n=2,
     min_cosine=0.1,
 )
 
-# pares é List[dict] — converta como quiser
-df_pares = pd.DataFrame(pares)
-print(df_pares[["text_a", "text_b", "score"]])
+# pairs is List[dict] — convert as you wish
+df_pairs = pd.DataFrame(pairs)
+print(df_pairs[["text_a", "text_b", "score"]])
 ```
 
-Cada dict contém: `index_a`, `text_a`, `index_b`, `text_b`, `score`, `details`.
+Each dict contains: `index_a`, `text_a`, `index_b`, `text_b`, `score`, `details`.
 
-> **Quando usar `compare_dataframe` vs `record_linkage`:**
-> - `compare_dataframe` → 1 query × N linhas de um DataFrame (busca de um usuário).
-> - `record_linkage` → M linhas × N linhas (deduplicação entre duas bases, cruzamento de fornecedores).
+> **When to use `compare_dataframe` vs `record_linkage`:**
+> - `compare_dataframe` → 1 query × N DataFrame rows (a user's search).
+> - `record_linkage` → M rows × N rows (deduplication between two bases, supplier matching).
 
 ---
 
-## ⚡ Performance para Alto Volume
+## ⚡ High-Volume Performance
 
-A biblioteca foi otimizada para cenários de alto volume (100+ queries x 100k+ candidatos) com múltiplas técnicas que reduzem significativamente o tempo de processamento.
+The library is optimized for high-volume scenarios (100+ queries × 100k+ candidates) with multiple techniques that significantly reduce processing time.
 
-### Cache Persistente de Catálogos (`preprocess_catalog`)
+### Persistent Catalog Cache (`preprocess_catalog`)
 
-Quando o mesmo catálogo de candidatos é reutilizado entre execuções (ex: rodadas diárias de matching contra uma base de produtos), use `preprocess_catalog()` para salvar os textos pré-processados em disco. Na primeira execução, processa e salva. Nas seguintes, carrega direto — economia de ~80% do tempo total.
+When the same candidate catalog is reused across runs (e.g., daily matching rounds against a product base), use `preprocess_catalog()` to save preprocessed texts to disk. On the first run, it processes and saves. On subsequent runs, it loads directly — saving ~80% of total time.
 
 ```python
 from text_similarity.api import Comparator
+
 comp = Comparator.smart()
 
-# Primeira execução: processa + salva em disco
-candidatos = ["Dell Inspiron 15", "Mouse Logitech MX", ...]  # 150k itens
-p_candidatos = comp.preprocess_catalog(candidatos, cache_path="meu_catalogo.pkl")
+# First run: process + save to disk
+candidates = ["Dell Inspiron 15", "Mouse Logitech MX", ...]  # 150k items
+p_candidates = comp.preprocess_catalog(candidates, cache_path="my_catalog.pkl")
 
-# Execuções seguintes: carrega do disco instantaneamente
-p_candidatos = comp.preprocess_catalog(candidatos, cache_path="meu_catalogo.pkl")
+# Subsequent runs: load from disk instantly
+p_candidates = comp.preprocess_catalog(candidates, cache_path="my_catalog.pkl")
 
-# Use com compare_many_to_many + preprocess=False nos candidatos já processados
-resultados = comp.compare_many_to_many(
-    queries, p_candidatos, top_n=10, preprocess=False,
+# Use with compare_many_to_many + preprocess=False on already-processed candidates
+results = comp.compare_many_to_many(
+    queries, p_candidates, top_n=10, preprocess=False,
 )
 ```
 
-A invalidação é automática via hash SHA-256: se o catálogo mudar (itens adicionados, removidos ou alterados), o cache é reprocessado automaticamente.
+Invalidation is automatic via SHA-256 hash: if the catalog changes (items added, removed, or altered), the cache is reprocessed automatically.
 
-### Pré-processamento Paralelo Automático
+### Automatic Parallel Preprocessing
 
-Para lotes com mais de 1.000 textos, o `_process_batch()` distribui automaticamente o trabalho entre múltiplos processos via `ProcessPoolExecutor`, sem necessidade de configuração. Compatível com Windows (`spawn`).
+For batches with more than 1,000 texts, `_process_batch()` automatically distributes work across multiple processes via `ProcessPoolExecutor`, without configuration. Compatible with Windows (`spawn`).
 
-### Otimizações Internas
+### Internal Optimizations
 
-As seguintes otimizações são aplicadas automaticamente e não requerem mudanças no código do usuário:
+The following optimizations are applied automatically and require no user code changes:
 
-| Otimização | Impacto | Descrição |
+| Optimization | Impact | Description |
 |---|---|---|
-| Regex pré-compilados | ~15-25% | Todos os 12 patterns de regex são compilados uma única vez no nível de classe |
-| Pré-processamento paralelo | ~40-60% | Lotes grandes (>1k textos) são distribuídos entre múltiplos processos |
-| Batch spaCy (`nlp.pipe()`) | ~20-40% | Lematização via spaCy usa batch processing ao invés de chamadas individuais |
-| Cache persistente | ~80% (re-exec) | Catálogos processados são salvos em disco e reutilizados entre execuções |
-| LRU cache dateparser | ~5-10% | Datas já resolvidas são cacheadas em memória (até 1024 entradas) |
-| Fonética otimizada | ~5-10% | Substituições fonéticas via regex compilado + mapa ao invés de `.replace()` sequenciais |
+| Pre-compiled regex | ~15-25% | All 12 regex patterns are compiled once at class level |
+| Parallel preprocessing | ~40-60% | Large batches (>1k texts) are distributed across multiple processes |
+| spaCy batch (`nlp.pipe()`) | ~20-40% | Lemmatization via spaCy uses batch processing instead of individual calls |
+| Persistent cache | ~80% (re-run) | Processed catalogs are saved to disk and reused across runs |
+| dateparser LRU cache | ~5-10% | Already resolved dates are cached in memory (up to 1024 entries) |
+| Optimized phonetics | ~5-10% | Phonetic substitutions via compiled regex + map instead of sequential `.replace()` |
 
-### Indexação BM25 (`indexing_strategy="bm25"`)
+### BM25 Indexing (`indexing_strategy="bm25"`)
 
-Por padrão, o pipeline de filtragem usa TF-IDF + cosseno. Para cenários com **textos curtos** (produtos, modelos, SKUs de 3-15 tokens), o BM25 (Okapi BM25) oferece ranking superior graças à saturação de term frequency e normalização por comprimento de documento.
+By default, the filtering pipeline uses TF-IDF + cosine. For scenarios with **short texts** (products, models, SKUs with 3-15 tokens), BM25 (Okapi BM25) offers superior ranking thanks to term frequency saturation and document length normalization.
 
 ```python
 from text_similarity.api import Comparator
 
-# BM25 como estratégia de indexação
+# BM25 as indexing strategy
 comp = Comparator.smart(
     entities=["product_model"],
     indexing_strategy="bm25",
 )
 
-# Uso idêntico — toda a API funciona transparentemente com BM25
-resultados = comp.compare_batch("samsung galaxy s22", candidatos, top_n=10)
+# Identical usage — the entire API works transparently with BM25
+results = comp.compare_batch("samsung galaxy s22", candidates, top_n=10)
 
-# Multi-query: índice BM25 construído uma única vez, reutilizado por todas as queries
-todos = comp.compare_many_to_many(buscas, candidatos, top_n=5)
+# Multi-query: BM25 index built once, reused by all queries
+all_results = comp.compare_many_to_many(queries, candidates, top_n=5)
 
-# Async (FastAPI, aiohttp, Starlette) — herda o indexing_strategy automaticamente
-resultados = await comp.compare_batch_async("samsung galaxy s22", candidatos, top_n=10)
-todos = await comp.compare_many_to_many_async(buscas, candidatos, top_n=5)
+# Async (FastAPI, aiohttp, Starlette) — inherits indexing_strategy automatically
+results = await comp.compare_batch_async("samsung galaxy s22", candidates, top_n=10)
+all_results = await comp.compare_many_to_many_async(queries, candidates, top_n=5)
 ```
 
-Os parâmetros `bm25_k1` (saturação de frequência) e `bm25_b` (normalização por comprimento) podem ser ajustados para o seu domínio. Para produtos curtos (3-8 tokens), `bm25_k1=1.5` e `bm25_b=0.3` reduzem a penalização por comprimento:
+The parameters `bm25_k1` (frequency saturation) and `bm25_b` (length normalization) can be adjusted for your domain. For short products (3-8 tokens), `bm25_k1=1.5` and `bm25_b=0.3` reduce length penalty:
 
 ```python
-# Otimizado para catálogos de produtos curtos
+# Optimized for short product catalogs
 comp = Comparator.smart(
     indexing_strategy="bm25",
     bm25_k1=1.5,
@@ -704,25 +732,25 @@ comp = Comparator.smart(
 )
 ```
 
-#### BM25 + `entities=["product_model"]`: sinergia para modelos técnicos
+#### BM25 + `entities=["product_model"]`: synergy for technical models
 
-A combinação `indexing_strategy="bm25"` + `entities=["product_model"]` é especialmente eficaz para catálogos com modelos no formato `XX.NNN.NN` (ex: `QS.250.08`, `QG.418.17`).
+The combination `indexing_strategy="bm25"` + `entities=["product_model"]` is especially effective for catalogs with models in the format `XX.NNN.NN` (e.g., `QS.250.08`, `QG.418.17`).
 
-O pipeline opera em **duas etapas distintas**:
+The pipeline operates in **two distinct stages**:
 
-| Etapa | TF-IDF | BM25 |
+| Stage | TF-IDF | BM25 |
 |---|---|---|
-| **Pré-filtragem** | Vetoriza tokens (`qs`, `250`, `08`) — `250` tem IDF baixo (aparece em muitos candidatos) | Idem, mas `<productmodel:QS25008>` (gerado pelo extrator) tem IDF altíssimo — candidato exato sobe no ranking |
-| **Scoring final** | `HybridSimilarity` (cosine + edit + phonetic + entity) — idêntico nos dois casos | Idêntico — short-circuit de entidade dispara `0.95` se o modelo exato estiver no `top_n` |
+| **Pre-filtering** | Vectorizes tokens (`qs`, `250`, `08`) — `250` has low IDF (appears in many candidates) | Same, but `<productmodel:QS25008>` (generated by the extractor) has very high IDF — exact candidate rises in ranking |
+| **Final scoring** | `HybridSimilarity` (cosine + edit + phonetic + entity) — identical in both cases | Identical — entity short-circuit triggers `0.95` if the exact model is in `top_n` |
 
-**Com TF-IDF isolado:** o token `250` aparece em `250.080.612`, `250.080.588`, etc. — o candidato exato pode não entrar no `top_n` se houver muitos concorrentes com o mesmo prefixo numérico.
+**With isolated TF-IDF:** the token `250` appears in `250.080.612`, `250.080.588`, etc. — the exact candidate may not enter `top_n` if there are many competitors with the same numeric prefix.
 
-**Com BM25 + entities:** o tag `<productmodel:QS25008>` é único no corpus → IDF máximo → candidato exato sempre entra no `top_n` → short-circuit garante `score = 0.95`.
+**With BM25 + entities:** the tag `<productmodel:QS25008>` is unique in the corpus → maximum IDF → exact candidate always enters `top_n` → short-circuit guarantees `score = 0.95`.
 
 ```python
 from text_similarity.api import Comparator
 
-candidatos = [
+candidates = [
     "QS.250.08",
     "250.080.612",
     "250.080.588",
@@ -734,30 +762,30 @@ comp = Comparator.smart(
     indexing_strategy="bm25",
 )
 
-resultados = comp.compare_batch("QS.250.08", candidatos, top_n=4, min_cosine=0.0)
-# resultados[0] → {"candidate": "QS.250.08", "score": 0.95}   ← short-circuit ativo
-# resultados[1] → {"candidate": "250.080.612", "score": ~0.3}  ← sem entidade em comum
+results = comp.compare_batch("QS.250.08", candidates, top_n=4, min_cosine=0.0)
+# results[0] → {"candidate": "QS.250.08", "score": 0.95}   ← short-circuit active
+# results[1] → {"candidate": "250.080.612", "score": ~0.3}  ← no shared entity
 ```
 
-> **Quando usar esta combinação:** catálogos de peças técnicas, SKUs com separadores de ponto ou hífen, referências de produtos industriais. Para buscas de texto livre (ex: "quero um celular barato"), a combinação não adiciona benefício — use `Comparator.smart()` sem `indexing_strategy` específico.
+> **When to use this combination:** technical parts catalogs, SKUs with dot or hyphen separators, industrial product references. For free-text searches (e.g., "quero um celular barato"), the combination adds no benefit — use `Comparator.smart()` without a specific `indexing_strategy`.
 
-### Indexação Densa (`indexing_strategy="dense"`)
+### Dense Indexing (`indexing_strategy="dense"`)
 
-Para cenários onde a query e os candidatos são **semanticamente equivalentes mas não compartilham palavras** (ex: `"veículo flex"` vs `"carro bicombustível"`), o índice denso usa embeddings do `sentence-transformers` como filtro inicial, capturando similaridade semântica antes mesmo do `HybridSimilarity` entrar em ação.
+For scenarios where the query and candidates are **semantically equivalent but do not share words** (e.g., `"veículo flex"` vs `"carro bicombustível"`), the dense index uses `sentence-transformers` embeddings as an initial filter, capturing semantic similarity before `HybridSimilarity` even kicks in.
 
 ```python
 from text_similarity.api import Comparator
 
-# Índice denso — resolve o gap de recall de sinônimos
+# Dense index — solves the synonym recall gap
 comp = Comparator.smart(
     indexing_strategy="dense",
 )
 
-# Candidato será encontrado mesmo sem sobreposição lexical
-resultados = comp.compare_batch("veículo flex", candidatos, top_n=10)
+# Candidate will be found even without lexical overlap
+results = comp.compare_batch("veículo flex", candidates, top_n=10)
 ```
 
-Por padrão utiliza o modelo `paraphrase-multilingual-MiniLM-L12-v2` (multilingual, inclui PT-BR). Para usar outro modelo:
+By default it uses the `paraphrase-multilingual-MiniLM-L12-v2` model (multilingual, includes PT-BR). To use another model:
 
 ```python
 comp = Comparator.smart(
@@ -766,80 +794,80 @@ comp = Comparator.smart(
 )
 ```
 
-> **⚠️ Limitação importante:** O `DenseIndex` roda em CPU e leva ~5-10 minutos para indexar 150k documentos. **Use apenas para catálogos pequenos/médios (até ~10k itens).** Para grandes volumes com recall semântico, use `rerank_vector_results` combinado com um banco vetorial externo (Qdrant, Pinecone, etc.).
+> **⚠️ Important limitation:** `DenseIndex` runs on CPU and takes ~5-10 minutes to index 150k documents. **Use only for small/medium catalogs (up to ~10k items).** For large volumes with semantic recall, use `rerank_vector_results` combined with an external vector database (Qdrant, Pinecone, etc.).
 
-> **Quando usar `"dense"`:** Catálogos de até ~10k itens com alta variação lexical — sinônimos, linguagem informal, suporte ao cliente.
+> **When to use `"dense"`:** Catalogs up to ~10k items with high lexical variation — synonyms, informal language, customer support.
 
-> **Compatível com todas as features:** Dense funciona com `strategy="parallel"`, `fusion_strategy="rrf"`, `preprocess=False` e métodos async. A troca é transparente — apenas mude o `indexing_strategy`.
+> **Compatible with all features:** Dense works with `strategy="parallel"`, `fusion_strategy="rrf"`, `preprocess=False`, and async methods. The switch is transparent — just change `indexing_strategy`.
 
-#### Estimativa de Impacto: TF-IDF vs BM25 vs Dense
+#### Impact Estimate: TF-IDF vs BM25 vs Dense
 
-| Métrica | TF-IDF | BM25 | Dense |
+| Metric | TF-IDF | BM25 | Dense |
 |---|---|---|---|
-| Qualidade de ranking (textos curtos) | Baseline | **+10-20% precision@10** | Variável por domínio |
-| Recall semântico (sinônimos) | Baixo | Baixo | **Alto** |
-| Tempo de indexação (150k candidatos) | ~2s | ~1-3s (comparável) | Não recomendado* |
-| Tempo por query | ~5ms (sparse matmul) | ~15-30ms (loop) | ~5-20ms |
-| Memória | ~50MB (sparse matrix) | ~80-100MB (dicts) | ~200-500MB |
+| Ranking quality (short texts) | Baseline | **+10-20% precision@10** | Variable by domain |
+| Semantic recall (synonyms) | Low | Low | **High** |
+| Indexing time (150k candidates) | ~2s | ~1-3s (comparable) | Not recommended* |
+| Time per query | ~5ms (sparse matmul) | ~15-30ms (loop) | ~5-20ms |
+| Memory | ~50MB (sparse matrix) | ~80-100MB (dicts) | ~200-500MB |
 
-*\*Em CPU, o `DenseIndex` leva ~5-10 minutos para indexar 150k candidatos. É adequado apenas para catálogos de até ~10k itens.*
+*\*On CPU, `DenseIndex` takes ~5-10 minutes to index 150k candidates. It is suitable only for catalogs up to ~10k items.*
 
-**Recomendação:** use BM25 para catálogos de produtos/SKUs, TF-IDF para bases de texto longo ou volume extremo de queries, e Dense apenas para catálogos de até ~10k itens com alta variação lexical entre query e candidatos.
+**Recommendation:** use BM25 for product/SKU catalogs, TF-IDF for long-text bases or extreme query volume, and Dense only for catalogs up to ~10k items with high lexical variation between query and candidates.
 
-### Otimização: Evitando Recálculo Semântico com `indexing_strategy="dense"`
+### Optimization: Avoiding Semantic Recalculation with `indexing_strategy="dense"`
 
-Quando `indexing_strategy="dense"` e `use_embeddings=True` são usados simultaneamente **com o mesmo modelo**, a biblioteca detecta automaticamente que os embeddings da query e dos candidatos já foram computados na fase de filtragem pelo `DenseIndex` e **reutiliza o score** na fase híbrida — eliminando o reencoding redundante:
+When `indexing_strategy="dense"` and `use_embeddings=True` are used simultaneously **with the same model**, the library automatically detects that the query and candidate embeddings have already been computed in the filtering phase by `DenseIndex` and **reuses the score** in the hybrid phase — eliminating redundant reencoding:
 
 ```python
-# O DenseIndex e o SemanticSimilarity usam o mesmo modelo por padrão.
-# Nenhuma configuração adicional é necessária — a otimização é automática.
+# DenseIndex and SemanticSimilarity use the same model by default.
+# No additional configuration is needed — the optimization is automatic.
 comp = Comparator.smart(
     indexing_strategy="dense",
     use_embeddings=True,
 )
 
-resultados = comp.compare_batch("veículo flex", candidatos, top_n=10)
-# O encode() do sentence-transformers roda apenas UMA vez por candidato,
-# não duas (filtragem + scoring híbrido).
+results = comp.compare_batch("veículo flex", candidates, top_n=10)
+# sentence-transformers encode() runs only ONCE per candidate,
+# not twice (filtering + hybrid scoring).
 ```
 
-> **Quando NÃO ocorre:** Se `dense_model_name` for diferente do modelo padrão do `SemanticSimilarity`, os modelos são distintos e o reuso não é aplicado — cada algoritmo usa seu próprio encoder.
+> **When it does NOT occur:** If `dense_model_name` differs from the default `SemanticSimilarity` model, the models are distinct and reuse is not applied — each algorithm uses its own encoder.
 
-### Liberando o Modelo da Memória (`unload_embeddings_model`)
+### Unloading the Model from Memory (`unload_embeddings_model`)
 
-Após uma sessão de inferência intensa, você pode liberar o modelo semântico da RAM/VRAM:
+After an intensive inference session, you can release the semantic model from RAM/VRAM:
 
 ```python
 comp = Comparator.smart(use_embeddings=True)
 
-# ... processamento ...
+# ... processing ...
 
-# Libera o modelo da memória global
+# Releases the model from global memory
 comp.unload_embeddings_model()
 
-# O modelo será recarregado automaticamente na próxima comparação semântica
+# The model will be automatically reloaded on the next semantic comparison
 ```
 
 ---
 
-## 🎯 Interpretação dos Scores
+## 🎯 Interpreting Scores
 
-O score retornado varia entre `0.0` (completamente diferentes) e `1.0` (idênticos).
+The returned score ranges from `0.0` (completely different) to `1.0` (identical).
 
-| Faixa | Interpretação |
+| Range | Interpretation |
 |---|---|
-| `>= 0.85` | Match muito forte — provável duplicata ou variação mínima de descrição |
-| `0.60 – 0.84` | Match provável — mesmo item com descrição diferente (ex: código com/sem espaço) |
-| `0.35 – 0.59` | Match incerto — requer revisão manual |
-| `< 0.35` | Sem relação semântica relevante |
+| `>= 0.85` | Very strong match — likely duplicate or minimal description variation |
+| `0.60 – 0.84` | Probable match — same item with different description (e.g., code with/without space) |
+| `0.35 – 0.59` | Uncertain match — requires manual review |
+| `< 0.35` | No relevant semantic relationship |
 
-> **Dica:** Para domínios com códigos de produto (materiais, SKUs, peças técnicas), um threshold de `>= 0.60` é um bom ponto de partida. Calibre com pares conhecidos do seu domínio para ajustar precisão × recall.
+> **Tip:** For domains with product codes (materials, SKUs, technical parts), a threshold of `>= 0.60` is a good starting point. Calibrate with known pairs from your domain to adjust precision × recall.
 
 ---
 
-## 📈 Calibração de Pesos (Grid Search)
+## 📈 Weight Calibration (Grid Search)
 
-Para obter a melhor precisão em domínios específicos, você pode calibrar os pesos do algoritmo `HybridSimilarity` usando o `WeightCalibrator`. Ele permite testar múltiplas combinações de pesos contra um dataset "Gold Standard" (anotado manualmente) e gera um relatório detalhado de performance comparativa entre precisão e custo de tempo (latência).
+To achieve the best precision in specific domains, you can calibrate the `HybridSimilarity` algorithm weights using `WeightCalibrator`. It allows testing multiple weight combinations against a "Gold Standard" dataset (manually annotated) and generates a detailed performance report comparing precision and time cost (latency).
 
 ```python
 from text_similarity.api import Comparator
@@ -847,13 +875,13 @@ from text_similarity.tuning.calibrator import WeightCalibrator
 
 comp = Comparator.smart()
 
-# Dataset de teste (Gold Standard)
+# Gold Standard test dataset
 gold_standard = [
     {"query": "casa", "target": "caza", "match": True},
     {"query": "celular", "target": "fone", "match": False},
 ]
 
-# Configurações de pesos que você deseja comparar
+# Weight configurations you want to compare
 configs = [
     {"cosine": 0.5, "edit": 0.5},
     {"edit": 1.0},
@@ -863,50 +891,51 @@ configs = [
 calibrator = WeightCalibrator(comp, configs)
 report = calibrator.evaluate(gold_standard)
 
-# Exibe o dashboard de resultados (requer extra 'tuning')
+# Displays the results dashboard (requires extra 'tuning')
 report.summary()
 ```
 
-Para habilitar a visualização rica (rich terminal dashboard):
+To enable rich visualization (rich terminal dashboard):
+
 ```bash
-# Com uv
+# With uv
 uv add "text-similarity-br[tuning]"
 
-# Com pip
+# With pip
 pip install "text-similarity-br[tuning]"
 ```
 
 ---
 
-## ⚙️ Configuração do Cache
+## ⚙️ Cache Configuration
 
-A biblioteca mantém um cache in-memory (SHA-256) para evitar reprocessar o mesmo texto várias vezes pelo pipeline. Por padrão, o cache está **ativado**.
+The library maintains an in-memory cache (SHA-256) to avoid reprocessing the same text multiple times through the pipeline. By default, the cache is **enabled**.
 
 ```python
 from text_similarity.api import Comparator
 
-# Cache ativado por padrão (padrão)
+# Cache enabled by default
 comp = Comparator.smart(use_cache=True)
 
-# Desativar o cache (útil em ambientes com memória limitada ou testes)
+# Disable cache (useful in memory-limited environments or tests)
 comp_no_cache = Comparator.smart(use_cache=False)
 ```
 
-### Cache Persistente em Disco
+### Persistent Disk Cache
 
-Para cenários de alto volume com catálogos reutilizáveis, use `preprocess_catalog()` para salvar em disco e eliminar reprocessamento entre execuções. Veja a seção [Cache Persistente de Catálogos](#cache-persistente-de-catálogos-preprocess_catalog) para detalhes.
+For high-volume scenarios with reusable catalogs, use `preprocess_catalog()` to save to disk and eliminate reprocessing between runs. See the [Persistent Catalog Cache](#persistent-catalog-cache-preprocess_catalog) section for details.
 
-### Limpando o Cache Manualmente
+### Manually Clearing the Cache
 
-Use `clear_cache()` quando precisar forçar o reprocessamento — por exemplo, depois de alterar as entidades ativas ou ao liberar memória após um lote grande:
+Use `clear_cache()` when you need to force reprocessing — for example, after changing active entities or when freeing memory after a large batch:
 
 ```python
 comp = Comparator.smart()
 
-# Processa e armazena em cache
-comp.compare("produto A", "produto B")
+# Processes and stores in cache
+comp.compare("product A", "product B")
 
-# Libera toda a memória do cache in-memory e limpa o cache em disco (Joblib)
+# Frees all in-memory cache and clears disk cache (Joblib)
 comp.clear_cache()
 ```
 
@@ -914,47 +943,35 @@ comp.clear_cache()
 
 ## 🔒 Security
 
-Esta seção resume as escolhas de segurança da biblioteca. Para a lista completa
-de mudanças, consulte as notas da release correspondente no GitHub.
+This section summarizes the library's security choices. For the complete list of changes, see the release notes on GitHub.
 
-### Autenticação de índices com `hmac_key`
+### Index Authentication with `hmac_key`
 
-`BM25Index` e `DenseIndex` usam o formato `tsbr-index-v2`, que inclui um
-cabeçalho JSON com metadados e um HMAC-SHA256 opcional. Ao salvar, forneça uma
-chave para garantir a integridade e autenticidade do arquivo em disco:
+`BM25Index` and `DenseIndex` use the `tsbr-index-v2` format, which includes a JSON header with metadata and an optional HMAC-SHA256. When saving, provide a key to guarantee the integrity and authenticity of the file on disk:
 
 ```python
 from text_similarity.core.bm25 import BM25Index
 from text_similarity.core.dense import DenseIndex
 
-# Salvar com HMAC
-index.save("catalogo.tsbr-index", hmac_key=b"minha-chave-secreta-de-32bytes")
+# Save with HMAC
+index.save("catalog.tsbr-index", hmac_key=b"my-secret-32byte-key")
 
-# Carregar validando o HMAC
-index = BM25Index.load("catalogo.tsbr-index", hmac_key=b"minha-chave-secreta-de-32bytes")
+# Load validating HMAC
+index = BM25Index.load("catalog.tsbr-index", hmac_key=b"my-secret-32byte-key")
 ```
 
-> **Atenção:** quando `hmac_key` não é fornecido, o `integrity_hash` SHA-256
-> sem chave ainda protege contra corrupção acidental, mas **não** garante
-> autenticidade. Em produção, configure sempre uma chave secreta e armazene-a
-> em um gerenciador de secrets (ex: variável de ambiente, Vault, AWS Secrets
-> Manager).
+> **Attention:** when `hmac_key` is not provided, the keyless SHA-256 `integrity_hash` still protects against accidental corruption, but **does not** guarantee authenticity. In production, always configure a secret key and store it in a secrets manager (e.g., environment variable, Vault, AWS Secrets Manager).
 
-### Supply chain: fixar revisão do modelo
+### Supply Chain: Pinning Model Revision
 
-Para ambientes de produção que exigem reprodutibilidade e controle sobre modelos
-do HuggingFace, a biblioteca permite fixar uma revisão específica do modelo de
-embeddings via `dense_model_revision`.
+For production environments requiring reproducibility and control over HuggingFace models, the library allows pinning a specific revision of the embeddings model via `dense_model_revision`.
 
-Quando informado, o SHA é propagado como `revision=<sha>` para o
-`SentenceTransformer`, garantindo que o mesmo peso seja carregado em todas as
-réplicas e execuções. A chave de cache interna dos modelos inclui também o
-`device` e a `revision`, impedindo reuso incorreto entre configurações distintas.
+When provided, the SHA is propagated as `revision=<sha>` to `SentenceTransformer`, ensuring the same weights are loaded across all replicas and runs. The internal model cache key also includes `device` and `revision`, preventing incorrect reuse between distinct configurations.
 
 ```python
 from text_similarity import Comparator
 
-# Pin de supply chain: carrega exatamente a revisão informada
+# Supply chain pin: loads exactly the informed revision
 comp = Comparator.smart(
     use_embeddings=True,
     indexing_strategy="dense",
@@ -963,41 +980,29 @@ comp = Comparator.smart(
 )
 ```
 
-> **Segurança:** o parâmetro `dense_model_name` **não deve aceitar valores
-> fornecidos diretamente por usuários não confiáveis**. Quando exposto em APIs
-> ou interfaces, aplique uma whitelist de modelos permitidos na aplicação
-> hospedeira.
+> **Security:** the `dense_model_name` parameter **should not accept values directly provided by untrusted users**. When exposed in APIs or interfaces, apply a whitelist of allowed models in the host application.
 
-> **Preferência por SafeTensors:** ao publicar ou versionar seus próprios
-> modelos, prefira o formato `safetensors` em detrimento de pickles arbitrários,
-> reduzindo a superfície de ataque de desserialização insegura.
+> **Preference for SafeTensors:** when publishing or versioning your own models, prefer the `safetensors` format over arbitrary pickles, reducing the surface of insecure deserialization attacks.
 
-### Modo estrito do `SemanticSimilarity`
+### `SemanticSimilarity` Strict Mode
 
-A partir desta versão, `SemanticSimilarity` opera em modo estrito por padrão
-(`strict=True`). Falhas do backend (modelo ausente, OOM, erro de CUDA, etc.)
-são convertidas em `SemanticSimilarityError` em vez de retornarem silenciosamente
-`0.0` e envenenarem o ranking.
+Starting from this version, `SemanticSimilarity` operates in strict mode by default (`strict=True`). Backend failures (missing model, OOM, CUDA error, etc.) are converted to `SemanticSimilarityError` instead of silently returning `0.0` and poisoning the ranking.
 
 ```python
 from text_similarity import Comparator
 
-# Recomendado para produção: falhas são explícitas
+# Recommended for production: failures are explicit
 comp = Comparator.smart(use_embeddings=True, strict=True)
 
-# Fallback tolerante: falhas retornam 0.0 e o stacktrace vai para o log
-comp_tolerante = Comparator.smart(use_embeddings=True, strict=False)
+# Tolerant fallback: failures return 0.0 and stacktrace goes to log
+comp_tolerant = Comparator.smart(use_embeddings=True, strict=False)
 ```
 
-Use `strict=True` sempre que a qualidade do ranking for crítica; use
-`strict=False` apenas em cenários de exploração onde um retorno parcial é
-aceitável.
+Use `strict=True` whenever ranking quality is critical; use `strict=False` only in exploration scenarios where a partial return is acceptable.
 
-### Thread-safety do `Comparator`
+### `Comparator` Thread-Safety
 
-`Comparator` é thread-safe para uso concorrente. O cache in-memory é protegido
-por `threading.Lock()`, permitindo compartilhar a mesma instância entre threads
-de um `ThreadPoolExecutor` ou requisições concorrentes de um servidor web:
+`Comparator` is thread-safe for concurrent use. The in-memory cache is protected by `threading.Lock()`, allowing the same instance to be shared between threads of a `ThreadPoolExecutor` or concurrent requests of a web server:
 
 ```python
 from concurrent.futures import ThreadPoolExecutor
@@ -1006,18 +1011,16 @@ from text_similarity import Comparator
 comp = Comparator.smart()
 
 with ThreadPoolExecutor(max_workers=4) as executor:
-    futuros = [
+    futures = [
         executor.submit(comp.compare, "iphone 13", "iphone 13 pro")
         for _ in range(100)
     ]
-    resultados = [f.result() for f in futuros]
+    results = [f.result() for f in futures]
 ```
 
-### Upgrade guide
+### Upgrade Guide
 
-Índices salvos em versões ≤ 0.8.x usam pickle/joblib e **não são carregados
-automaticamente** a partir desta versão. Migre para o formato seguro
-`tsbr-index-v2` com o utilitário CLI:
+Indexes saved in versions ≤ 0.8.x use pickle/joblib and are **not automatically loaded** from this version. Migrate to the secure `tsbr-index-v2` format with the CLI utility:
 
 ```bash
 python -m text_similarity.tools.migrate_index \
@@ -1026,24 +1029,22 @@ python -m text_similarity.tools.migrate_index \
     --i-accept-pickle-risk
 ```
 
-O comando lê o arquivo legado, converte para o novo formato e opcionalmente
-aplica HMAC. Para aplicar autenticação, passe `--hmac-key` (ou use a API
-`BM25Index.save` / `DenseIndex.save` após a migração).
+The command reads the legacy file, converts it to the new format, and optionally applies HMAC. To apply authentication, pass `--hmac-key` (or use the `BM25Index.save` / `DenseIndex.save` API after migration).
 
-Consulte as notas da release no GitHub para a lista completa de BREAKING CHANGES.
+See the release notes on GitHub for the complete list of BREAKING CHANGES.
 
 ---
 
-## 🔌 Extensibilidade — Registrando Entidades Customizadas
+## 🔌 Extensibility — Registering Custom Entities
 
-A biblioteca expõe o `ExtractorRegistry` para registrar extratores de entidade personalizados, sem precisar alterar o código-fonte:
+The library exposes `ExtractorRegistry` to register custom entity extractors without modifying the source code:
 
 ```python
 from text_similarity.entities.base import EntityExtractor, EntityMatch
 from text_similarity.entities.registry import ExtractorRegistry
 
 class CPFExtractor(EntityExtractor):
-    """Exemplo: extrator de CPF para sistemas de RH."""
+    """Example: CPF extractor for HR systems."""
 
     def extract(self, text: str) -> list[EntityMatch]:
         import re
@@ -1058,17 +1059,17 @@ class CPFExtractor(EntityExtractor):
             ))
         return matches
 
-# Registra o extrator customizado
+# Register the custom extractor
 ExtractorRegistry.register("cpf", CPFExtractor)
 
-# Instancia o Comparator ativando apenas o seu extrator
+# Instantiate Comparator activating only your extractor
 comp = Comparator.smart(entities=["cpf"])
 score = comp.compare("019.283.847-09", "documento cpf 01928384709")
 ```
 
-Extratores disponíveis por padrão:
+Default available extractors:
 
-| Nome | Exemplos detectados |
+| Name | Examples detected |
 |---|---|
 | `money` | `R$ 30,00`, `50 reais`, `USD 100` |
 | `date` | `12/03/2023`, `ontem`, `amanhã`, `25 de abril` |
@@ -1078,33 +1079,33 @@ Extratores disponíveis por padrão:
 
 ---
 
-## 🤝 Contribuindo
+## 🤝 Contributing
 
-Padrões de qualidade seguidos rigorosamente: `Ruff` (lint + format) e `MyPy` (tipagem forte).
+Quality standards strictly followed: `Ruff` (lint + format) and `MyPy` (strong typing).
 
-### Fluxo de Trabalho
+### Workflow
 
-- **Branch de desenvolvimento:** `dev` — todo desenvolvimento acontece aqui
-- Crie branches de feature a partir de `dev` e abra PRs de volta para `dev`
-- Merges para `main` são feitos apenas em releases
+- **Development branch:** `dev` — all development happens here
+- Create feature branches from `dev` and open PRs back to `dev`
+- Merges to `main` are done only on releases
 
-### Antes de Abrir um PR
+### Before Opening a PR
 
 ```bash
-# Lint e formatação
+# Lint and formatting
 uv run ruff check src tests
 uv run ruff format src tests
 
-# Tipagem
+# Type checking
 uv run mypy src
 
-# Testes
+# Tests
 uv run pytest tests/
 ```
 
-### Reportando Bugs / Sugestões
+### Reporting Bugs / Suggestions
 
-Abra uma [issue no GitHub](https://github.com/joscelino/text_similarity/issues) descrevendo:
-- Versão da biblioteca (`pip show text-similarity-br`)
-- Versão do Python
-- Exemplo mínimo reproduzível
+Open a [GitHub issue](https://github.com/joscelino/text_similarity/issues) describing:
+- Library version (`pip show text-similarity-br`)
+- Python version
+- Minimal reproducible example
